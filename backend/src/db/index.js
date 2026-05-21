@@ -1,10 +1,16 @@
 const { Pool } = require('pg');
 
+const dbUrl = process.env.DATABASE_URL || '';
+// Internal Railway Postgres không dùng SSL; public proxy thì có
+const needsSsl =
+  dbUrl.includes('sslmode=require') ||
+  dbUrl.includes('.rlwy.net') ||
+  dbUrl.includes('.proxy.rlwy');
+const isInternal = dbUrl.includes('.railway.internal');
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('railway') || process.env.DATABASE_URL?.includes('sslmode=require')
-    ? { rejectUnauthorized: false }
-    : false,
+  ssl: !isInternal && needsSsl ? { rejectUnauthorized: false } : false,
 });
 
 pool.on('error', (err) => {

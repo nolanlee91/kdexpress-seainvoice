@@ -38,7 +38,7 @@ const PORT = process.env.PORT || 4000;
 
 initDB()
   .then(() => {
-    app.listen(PORT, () => console.log(`[haibien-backend] listening on :${PORT}`));
+    app.listen(PORT, '0.0.0.0', () => console.log(`[haibien-backend] listening on 0.0.0.0:${PORT}`));
   })
   .catch((e) => {
     console.error('[fatal] initDB failed:', e);
