@@ -168,25 +168,29 @@ export default function SeaShipmentDetail() {
 
 function ScanTab({ shipmentId, customer, onReload }) {
   const [invoices, setInvoices] = useState([]);
-  const [scanning, setScanning] = useState(false);
-  const [error, setError] = useState('');
+  const [scanProgress, setScanProgress] = useState(null); // {current, total, fileName}
+  const [scanErrors, setScanErrors] = useState([]); // [{fileName, message}]
 
   async function load() {
     setInvoices(await api.listInvoices(shipmentId, customer.id));
   }
   useEffect(() => { load(); }, [shipmentId, customer.id]);
 
-  async function onUploaded(url) {
-    setScanning(true); setError('');
+  async function onUploaded(url, meta = {}) {
+    const { index = 0, total = 1, fileName = '' } = meta;
+    setScanProgress({ current: index + 1, total, fileName });
     try {
       await api.scanInvoice(shipmentId, customer.id, url);
-      await load(); onReload();
     } catch (e) {
-      setError(e.data?.message || e.message);
-    } finally {
-      setScanning(false);
+      setScanErrors((errs) => [...errs, { fileName, message: e.data?.message || e.message }]);
+    }
+    if (index === total - 1) {
+      await load(); onReload();
+      setTimeout(() => setScanProgress(null), 1500); // briefly hold final state
     }
   }
+  function resetErrors() { setScanErrors([]); }
+
   async function remove(invId) {
     if (!confirm('Xoá ảnh hóa đơn này? Items đã clone sang Data sửa cũng sẽ mất.')) return;
     await api.deleteInvoice(invId);
@@ -199,13 +203,26 @@ function ScanTab({ shipmentId, customer, onReload }) {
         <strong>Bước 1 — Upload ảnh hóa đơn để AI scan</strong>
         <div className="muted">
           AI đọc hóa đơn, lưu output bất biến vào <strong>Data gốc</strong> (bước 2) + auto-clone sang <strong>Data sửa</strong> (bước 3) cho manager review.
-          Có VN thì điền tên VN, có EN thì điền tên EN — AI KHÔNG tự dịch.
+          Có VN thì điền tên VN, có EN thì điền tên EN — AI KHÔNG tự dịch. Chọn nhiều ảnh cùng lúc bằng Ctrl/Shift.
         </div>
-        <div className="row">
-          <ImageUpload onUploaded={onUploaded} label={scanning ? 'Đang scan AI…' : 'Upload ảnh hóa đơn'} />
-          {scanning && <span className="muted">Đang gọi Gemini, vui lòng đợi 5-15 giây…</span>}
+        <div className="row" style={{ flexWrap: 'wrap', gap: 12 }}>
+          <ImageUpload onUploaded={onUploaded} multiple label="Upload ảnh hóa đơn" />
+          {scanProgress && (
+            <div className="muted">
+              Đang scan AI <strong>{scanProgress.current}/{scanProgress.total}</strong>
+              {scanProgress.fileName && ` · ${scanProgress.fileName}`} …
+            </div>
+          )}
         </div>
-        {error && <div className="error">{error}</div>}
+        {scanErrors.length > 0 && (
+          <div className="error" style={{ whiteSpace: 'pre-wrap', fontSize: 12 }}>
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <strong>Lỗi scan ({scanErrors.length}):</strong>
+              <button className="ghost" onClick={resetErrors}>Đóng</button>
+            </div>
+            {scanErrors.map((e, i) => <div key={i}>• {e.fileName}: {e.message}</div>)}
+          </div>
+        )}
       </div>
 
       <h4 style={{ margin: 0 }}>Lịch sử ảnh ({invoices.length})</h4>
