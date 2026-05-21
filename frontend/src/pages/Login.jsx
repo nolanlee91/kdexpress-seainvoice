@@ -31,13 +31,10 @@ export default function Login() {
       minHeight: '100vh', padding: 20, background: 'var(--bg-primary)',
     }}>
       <form className="card col" onSubmit={submit} style={{ width: 380, padding: 28 }}>
-        <div className="row" style={{ gap: 10, marginBottom: 4 }}>
-          <div className="sidebar-logo-icon" style={{ width: 36, height: 36 }}>📦</div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>Hàng Biển</div>
-            <div className="muted" style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              KDExpress · Internal
-            </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <img src="/logo.png" alt="KDExpress" style={{ height: 56, width: 'auto' }} />
+          <div className="muted" style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'lowercase', fontWeight: 500 }}>
+            seainvoice.hub
           </div>
         </div>
         <div>

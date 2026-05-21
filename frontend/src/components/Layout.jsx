@@ -17,15 +17,12 @@ export default function Layout() {
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <div className="sidebar-logo-icon">📦</div>
-          <div>
-            <div className="sidebar-logo-text">Hàng Biển</div>
-            <div className="sidebar-logo-subtitle">KDExpress</div>
-          </div>
+          <img src="/logo.png" alt="KDExpress" className="sidebar-logo-img" />
+          <div className="sidebar-logo-sub">seainvoice.hub</div>
         </div>
 
         <div className="sidebar-section-label">Operations</div>
-        <nav className="sidebar-nav">
+        <nav className="sidebar-nav sidebar-nav-primary">
           <NavLink to="/shipments" className={({ isActive }) => 'sidebar-link' + (isActive ? ' active' : '')}>
             Chuyến hàng biển
           </NavLink>

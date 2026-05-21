@@ -388,22 +388,25 @@ label:not(.btn) {
 }
 .sidebar-logo {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 20px 20px 20px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 4px 20px 20px 20px;
+  border-bottom: 1px solid var(--sidebar-border);
+  margin-bottom: 8px;
 }
-.sidebar-logo-icon {
-  width: 32px; height: 32px;
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, #4ade80, #22c55e);
-  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.25);
-  display: flex; align-items: center; justify-content: center;
-  color: #052e16;
-  font-weight: 700;
-  font-size: 16px;
+.sidebar-logo-img {
+  height: 36px;
+  width: auto;
+  display: block;
 }
-.sidebar-logo-text { font-weight: 700; color: var(--sidebar-text); font-size: 15px; }
-.sidebar-logo-subtitle { font-size: 10px; color: var(--sidebar-text-muted); letter-spacing: 0.08em; text-transform: uppercase; }
+.sidebar-logo-sub {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  color: var(--sidebar-text-muted);
+  text-transform: lowercase;
+}
 
 .sidebar-section-label {
   font-size: 10px;
@@ -412,11 +415,16 @@ label:not(.btn) {
   color: var(--sidebar-text-muted);
   text-transform: uppercase;
   padding: 0 20px;
-  margin: 24px 0 6px;
+  margin: 18px 0 6px;
 }
 .sidebar-nav {
-  display: flex; flex-direction: column; gap: 1px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   padding: 0 8px;
+}
+/* Primary nav (Operations) đẩy Account + user xuống bottom */
+.sidebar-nav-primary {
   flex: 1;
 }
 .sidebar-link {
