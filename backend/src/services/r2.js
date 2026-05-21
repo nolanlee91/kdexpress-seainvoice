@@ -1,18 +1,21 @@
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
+// Trim — defensive against accidentally pasted newlines / whitespace in env vars
+function env(name) {
+  return (process.env[name] || '').trim();
+}
+
 function getClient() {
-  const accountId = process.env.R2_ACCOUNT_ID;
+  const accountId = env('R2_ACCOUNT_ID');
   if (!accountId) throw new Error('r2_not_configured: missing R2_ACCOUNT_ID');
   return new S3Client({
     region: 'auto',
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     credentials: {
-      accessKeyId: process.env.R2_ACCESS_KEY_ID,
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+      accessKeyId: env('R2_ACCESS_KEY_ID'),
+      secretAccessKey: env('R2_SECRET_ACCESS_KEY'),
     },
-    // R2 doesn't fully support AWS SDK v3's auto-added CRC32 checksums in
-    // presigned URLs — disable them so browser PUT signatures match.
     requestChecksumCalculation: 'WHEN_REQUIRED',
     responseChecksumValidation: 'WHEN_REQUIRED',
   });
@@ -27,11 +30,11 @@ function buildKey(folder, contentType) {
 }
 
 async function createUploadUrl({ folder = 'haibien/invoices', contentType = 'image/jpeg' } = {}) {
-  const bucket = process.env.R2_BUCKET_NAME;
-  const publicBase = process.env.R2_PUBLIC_BASE_URL;
+  const bucket = env('R2_BUCKET_NAME');
+  const publicBase = env('R2_PUBLIC_BASE_URL');
   if (!bucket) throw new Error('r2_not_configured: missing R2_BUCKET_NAME');
   if (!publicBase) throw new Error('r2_not_configured: missing R2_PUBLIC_BASE_URL');
-  if (!process.env.R2_ACCESS_KEY_ID || !process.env.R2_SECRET_ACCESS_KEY) {
+  if (!env('R2_ACCESS_KEY_ID') || !env('R2_SECRET_ACCESS_KEY')) {
     throw new Error('r2_not_configured: missing R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY');
   }
 
