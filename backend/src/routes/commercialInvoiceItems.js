@@ -1,6 +1,7 @@
 const express = require('express');
 const { query, pool } = require('../db');
 const { authRequired } = require('../middleware/auth');
+const { translateUnit } = require('../utils/units');
 
 const router = express.Router();
 router.use(authRequired);
@@ -34,7 +35,7 @@ router.post('/sea-shipments/:id/commercial-invoice-items', async (req, res) => {
     [
       req.params.id, b.customer_id, b.source_invoice_id || null, lineNo,
       b.name_vn || '', b.name_en || '',
-      b.qty || 0, b.unit || 'PCS',
+      b.qty || 0, translateUnit(b.unit || 'PCS'),
       b.unit_value_usd || 0,
       b.total_value_usd != null ? b.total_value_usd : Number(b.qty || 0) * Number(b.unit_value_usd || 0),
       b.country_of_origin || 'VIETNAM',
@@ -73,6 +74,24 @@ router.delete('/commercial-invoice-items/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
+// Backfill: convert all VN units to EN for a customer's CI (in-place, không động qty/giá)
+router.post('/sea-shipments/:id/customers/:customerId/normalize-ci-units', async (req, res) => {
+  const { rows } = await query(
+    `SELECT id, unit FROM commercial_invoice_items
+      WHERE sea_shipment_id = $1 AND customer_id = $2`,
+    [req.params.id, req.params.customerId]
+  );
+  let changed = 0;
+  for (const r of rows) {
+    const newUnit = translateUnit(r.unit);
+    if (newUnit !== r.unit) {
+      await query(`UPDATE commercial_invoice_items SET unit = $1, updated_at = NOW() WHERE id = $2`, [newUnit, r.id]);
+      changed++;
+    }
+  }
+  res.json({ ok: true, scanned: rows.length, changed });
+});
+
 // Bulk upsert: dùng cho inline-edit toàn bảng — gửi cả danh sách + id của row bị xoá
 // Body: { sea_shipment_id, customer_id, upserts: [{id?, ...}], delete_ids: [int] }
 router.post('/commercial-invoice-items/bulk', async (req, res) => {
@@ -102,7 +121,7 @@ router.post('/commercial-invoice-items/bulk', async (req, res) => {
           RETURNING *`,
           [
             it.line_no || 0, it.name_vn || '', it.name_en || '',
-            it.qty || 0, it.unit || 'PCS',
+            it.qty || 0, translateUnit(it.unit || 'PCS'),
             it.unit_value_usd || 0,
             it.total_value_usd != null ? it.total_value_usd : Number(it.qty || 0) * Number(it.unit_value_usd || 0),
             it.country_of_origin || 'VIETNAM',
@@ -119,7 +138,7 @@ router.post('/commercial-invoice-items/bulk', async (req, res) => {
           [
             sea_shipment_id, customer_id, it.source_invoice_id || null, it.line_no || 0,
             it.name_vn || '', it.name_en || '',
-            it.qty || 0, it.unit || 'PCS',
+            it.qty || 0, translateUnit(it.unit || 'PCS'),
             it.unit_value_usd || 0,
             it.total_value_usd != null ? it.total_value_usd : Number(it.qty || 0) * Number(it.unit_value_usd || 0),
             it.country_of_origin || 'VIETNAM',

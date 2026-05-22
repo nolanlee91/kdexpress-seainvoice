@@ -2,48 +2,10 @@ const express = require('express');
 const { query, pool } = require('../db');
 const { authRequired } = require('../middleware/auth');
 const { translateNames } = require('../services/gemini');
+const { translateUnit } = require('../utils/units');
 
 const router = express.Router();
 router.use(authRequired);
-
-// Map đơn vị tính từ VN sang EN cho Commercial Invoice (khai báo hải quan)
-const UNIT_VN_TO_EN = {
-  'cái': 'PCS', 'chiếc': 'PCS', 'cây': 'PCS', 'con': 'PCS',
-  'bộ': 'SET',
-  'cuộn': 'ROLL', 'cuon': 'ROLL',
-  'hộp': 'BOX',
-  'túi': 'BAG',
-  'tấm': 'SHEET',
-  'thùng': 'CTN',
-  'lon': 'CAN',
-  'gói': 'PACK',
-  'đôi': 'PAIR',
-  'chai': 'BOTTLE',
-  'kg': 'KG',
-  'g': 'G',
-  'lít': 'L', 'lit': 'L',
-  'ml': 'ML',
-  'm': 'M', 'mét': 'M',
-  'cm': 'CM',
-  'pcs': 'PCS', 'pc': 'PCS', 'piece': 'PCS', 'pieces': 'PCS',
-  'set': 'SET', 'sets': 'SET',
-  'roll': 'ROLL', 'rolls': 'ROLL',
-  'pair': 'PAIR', 'pairs': 'PAIR',
-  'box': 'BOX', 'boxes': 'BOX',
-  'bottle': 'BOTTLE', 'bottles': 'BOTTLE',
-  'can': 'CAN', 'cans': 'CAN',
-  'pack': 'PACK', 'packs': 'PACK',
-  'bag': 'BAG', 'bags': 'BAG',
-  'sheet': 'SHEET', 'sheets': 'SHEET',
-  'carton': 'CTN', 'cartons': 'CTN', 'ctn': 'CTN',
-};
-
-function translateUnit(u) {
-  if (!u) return 'PCS';
-  const stripped = String(u).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
-  const directKey = String(u).toLowerCase().trim();
-  return UNIT_VN_TO_EN[directKey] || UNIT_VN_TO_EN[stripped] || String(u).toUpperCase();
-}
 
 router.get('/sea-shipments/:id/raw-data-items', async (req, res) => {
   const params = [req.params.id];

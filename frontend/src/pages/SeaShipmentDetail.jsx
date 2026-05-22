@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
 import ImageUpload from '../components/ImageUpload.jsx';
+import ImageDrawer from '../components/ImageDrawer.jsx';
 
 export default function SeaShipmentDetail() {
   const { id } = useParams();
@@ -170,6 +171,7 @@ function ScanTab({ shipmentId, customer, onReload }) {
   const [invoices, setInvoices] = useState([]);
   const [scanProgress, setScanProgress] = useState(null); // {current, total, fileName}
   const [scanErrors, setScanErrors] = useState([]); // [{fileName, message}]
+  const [drawerUrl, setDrawerUrl] = useState(null);
 
   async function load() {
     setInvoices(await api.listInvoices(shipmentId, customer.id));
@@ -231,11 +233,12 @@ function ScanTab({ shipmentId, customer, onReload }) {
         {invoices.map((inv) => (
           <div key={inv.id} className="card row" style={{ justifyContent: 'space-between' }}>
             <div className="row" style={{ gap: 12 }}>
-              <a href={inv.image_url} target="_blank" rel="noreferrer">
-                <img src={inv.image_url} alt="" style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 4 }} />
-              </a>
+              <img src={inv.image_url} alt="" onClick={() => setDrawerUrl(inv.image_url)}
+                style={{ width: 60, height: 60, objectFit: 'cover', borderRadius: 4, cursor: 'pointer' }} />
               <div>
-                <a href={inv.image_url} target="_blank" rel="noreferrer">📷 Xem ảnh đầy đủ</a>
+                <button className="ghost" onClick={() => setDrawerUrl(inv.image_url)} style={{ padding: 0, height: 'auto', boxShadow: 'none' }}>
+                  📷 Xem ảnh
+                </button>
                 <div className="muted" style={{ fontSize: 12 }}>
                   {new Date(inv.scanned_at).toLocaleString('vi-VN')} · {inv.status}
                   {inv.raw_json?.currency_detected && ` · ${inv.raw_json.currency_detected}`}
@@ -248,6 +251,7 @@ function ScanTab({ shipmentId, customer, onReload }) {
           </div>
         ))}
       </div>
+      <ImageDrawer url={drawerUrl} title={`Ảnh hóa đơn — ${customer.name}`} onClose={() => setDrawerUrl(null)} />
     </div>
   );
 }
@@ -258,6 +262,7 @@ function RawSnapshotTab({ shipmentId, customer, onReload }) {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [resyncing, setResyncing] = useState(null); // invoice id đang re-sync
+  const [drawerUrl, setDrawerUrl] = useState(null);
 
   async function load() {
     setInvoices(await api.listInvoices(shipmentId, customer.id));
@@ -301,9 +306,8 @@ function RawSnapshotTab({ shipmentId, customer, onReload }) {
         <div key={inv.id} className="card col">
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <div className="row" style={{ gap: 12 }}>
-              <a href={inv.image_url} target="_blank" rel="noreferrer">
-                <img src={inv.image_url} alt="" style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 4 }} />
-              </a>
+              <img src={inv.image_url} alt="" onClick={() => setDrawerUrl(inv.image_url)}
+                style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 4, cursor: 'pointer' }} />
               <div>
                 <div style={{ fontWeight: 500 }}>
                   Ảnh #{inv.id}
@@ -358,6 +362,7 @@ function RawSnapshotTab({ shipmentId, customer, onReload }) {
           )}
         </div>
       ))}
+      <ImageDrawer url={drawerUrl} title={`Ảnh hóa đơn — ${customer.name}`} onClose={() => setDrawerUrl(null)} />
     </div>
   );
 }
@@ -366,8 +371,9 @@ function RawSnapshotTab({ shipmentId, customer, onReload }) {
 
 function EditedDataTab({ shipmentId, customer, onReload }) {
   const [rows, setRows] = useState([]);
+  const [invoices, setInvoices] = useState([]);
   const [dirty, setDirty] = useState({});
-  const [newRows, setNewRows] = useState([]);
+  const [newRows, setNewRows] = useState([]); // each has _groupInvoiceId so we know which section they belong to
   const [deleteIds, setDeleteIds] = useState([]);
   const [currency, setCurrency] = useState(customer.currency || 'VND');
   const [rate, setRate] = useState(customer.exchange_rate_vnd_per_usd || '');
@@ -375,10 +381,15 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
   const [translating, setTranslating] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
   const [translateMsg, setTranslateMsg] = useState('');
+  const [drawerUrl, setDrawerUrl] = useState(null);
 
   async function load() {
-    const items = await api.listRawItems(shipmentId, customer.id);
+    const [items, invs] = await Promise.all([
+      api.listRawItems(shipmentId, customer.id),
+      api.listInvoices(shipmentId, customer.id),
+    ]);
     setRows(items);
+    setInvoices(invs);
     setDirty({}); setNewRows([]); setDeleteIds([]);
     setCurrency(customer.currency || 'VND');
     setRate(customer.exchange_rate_vnd_per_usd || '');
@@ -396,9 +407,11 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
     }));
     setDirty((d) => ({ ...d, [id]: true }));
   }
-  function addNewRow() {
+  function addNewRow(groupInvoiceId = null) {
     setNewRows((n) => [...n, {
       _tmp: Math.random(),
+      _groupInvoiceId: groupInvoiceId,
+      source_invoice_id: groupInvoiceId,
       line_no: rows.length + n.length + 1,
       name_vn: '', name_en: '', qty: 1, unit: 'PCS',
       unit_value: 0, total_value: 0, country_of_origin: 'VIETNAM',
@@ -478,6 +491,7 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
       }
       for (const r of newRows) {
         upserts.push({
+          source_invoice_id: r._groupInvoiceId || r.source_invoice_id || null,
           line_no: r.line_no, name_vn: r.name_vn, name_en: r.name_en,
           qty: r.qty, unit: r.unit,
           unit_value: r.unit_value, total_value: r.total_value,
@@ -509,13 +523,30 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
   const totalValue = rows.reduce((s, r) => s + Number(r.total_value || 0), 0)
                    + newRows.reduce((s, r) => s + Number(r.total_value || 0), 0);
 
+  // Group rows by source_invoice_id, in order of invoices list. Items without
+  // source go into the "Manual" group at the end.
+  const sortedInvoices = [...invoices].filter((i) => i.status === 'scanned').sort((a, b) => a.id - b.id);
+  const groups = sortedInvoices.map((inv) => ({
+    invoice: inv,
+    rows: rows.filter((r) => r.source_invoice_id === inv.id),
+    newRows: newRows.filter((r) => r._groupInvoiceId === inv.id),
+  }));
+  const manualGroup = {
+    invoice: null,
+    rows: rows.filter((r) => !sortedInvoices.some((i) => i.id === r.source_invoice_id)),
+    newRows: newRows.filter((r) => !r._groupInvoiceId),
+  };
+  if (manualGroup.rows.length > 0 || manualGroup.newRows.length > 0) {
+    groups.push(manualGroup);
+  }
+
   return (
     <div className="col">
       <div className="card col">
         <strong>Bước 3 — Data sửa cho {customer.name}</strong>
         <div className="muted">
-          Bản copy <strong>có thể sửa</strong> từ Data gốc. Sửa OCR, dịch tiếng Anh, chốt giá rồi <strong>💾 Lưu</strong>.
-          Không ảnh hưởng Data gốc (B2). Sau khi xong, sang B4 bấm "Tạo CI từ Data sửa".
+          Bản copy <strong>có thể sửa</strong> từ Data gốc. Items được nhóm theo ảnh hóa đơn — click ảnh để xem ở drawer bên phải.
+          Sửa OCR, dịch tiếng Anh, chốt giá rồi <strong>💾 Lưu</strong>. Không ảnh hưởng Data gốc (B2).
         </div>
         <div className="row" style={{ gap: 16, flexWrap: 'wrap' }}>
           <div style={{ minWidth: 120 }}>
@@ -534,8 +565,7 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
           )}
           <div style={{ flex: 1 }} />
           <div style={{ alignSelf: 'flex-end' }}>
-            <button onClick={addNewRow}>+ Thêm dòng</button>
-            <button onClick={translateMissing} disabled={translating} style={{ marginLeft: 8 }} title="Dùng AI dịch các dòng có name_vn nhưng name_en trống">
+            <button onClick={translateMissing} disabled={translating} title="Dùng AI dịch các dòng có name_vn nhưng name_en trống">
               {translating ? 'Đang dịch…' : '🌐 Dịch tiếng Anh (AI)'}
             </button>
             <button className="primary" disabled={(!hasDirty && !settingsChanged) || loading} onClick={saveAll} style={{ marginLeft: 8 }}>
@@ -545,69 +575,105 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
         </div>
         {savedMsg && <div className="success">{savedMsg}</div>}
         {translateMsg && <div className={translateMsg.startsWith('Lỗi') ? 'error' : 'success'}>{translateMsg}</div>}
+        <div className="row" style={{ justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: 12, fontSize: 13 }}>
+          <span className="muted">Tổng cộng <strong>{rows.length + newRows.length}</strong> dòng</span>
+          <span><strong>{totalQty.toLocaleString('en-US')}</strong> qty · <strong>{totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> {currency}</span>
+        </div>
       </div>
 
-      <div className="table-shell" style={{ overflow: 'auto' }}>
-        <table className="table">
-          <thead>
-            <tr>
-              <th style={{ width: 50 }}>#</th>
-              <th>Tên VN</th>
-              <th>Tên EN</th>
-              <th style={{ width: 80 }}>SL</th>
-              <th style={{ width: 80 }}>ĐV</th>
-              <th style={{ width: 130 }}>Đơn giá ({currency})</th>
-              <th style={{ width: 130 }}>Tổng ({currency})</th>
-              <th style={{ width: 90 }}>Country</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id}>
-                <td><input type="number" value={r.line_no || ''} onChange={(e) => patchRow(r.id, { line_no: Number(e.target.value) })} style={{ width: 50 }} /></td>
-                <td><input value={r.name_vn || ''} onChange={(e) => patchRow(r.id, { name_vn: e.target.value })} /></td>
-                <td><input value={r.name_en || ''} onChange={(e) => patchRow(r.id, { name_en: e.target.value })} /></td>
-                <td><input type="number" step="0.001" value={r.qty || ''} onChange={(e) => patchRow(r.id, { qty: e.target.value })} /></td>
-                <td><input value={r.unit || ''} onChange={(e) => patchRow(r.id, { unit: e.target.value })} /></td>
-                <td><input type="number" step="0.01" value={r.unit_value || ''} onChange={(e) => patchRow(r.id, { unit_value: e.target.value })} /></td>
-                <td><input type="number" step="0.01" value={r.total_value || ''} onChange={(e) => patchRow(r.id, { total_value: e.target.value })} /></td>
-                <td><input value={r.country_of_origin || ''} onChange={(e) => patchRow(r.id, { country_of_origin: e.target.value })} /></td>
-                <td><button className="danger" onClick={() => deleteRow(r.id)}>×</button></td>
-              </tr>
-            ))}
-            {newRows.map((r) => (
-              <tr key={r._tmp} style={{ background: 'rgba(22,163,74,0.06)' }}>
-                <td><input type="number" value={r.line_no} onChange={(e) => patchNewRow(r._tmp, { line_no: Number(e.target.value) })} style={{ width: 50 }} /></td>
-                <td><input value={r.name_vn} onChange={(e) => patchNewRow(r._tmp, { name_vn: e.target.value })} /></td>
-                <td><input value={r.name_en} onChange={(e) => patchNewRow(r._tmp, { name_en: e.target.value })} /></td>
-                <td><input type="number" step="0.001" value={r.qty} onChange={(e) => patchNewRow(r._tmp, { qty: e.target.value })} /></td>
-                <td><input value={r.unit} onChange={(e) => patchNewRow(r._tmp, { unit: e.target.value })} /></td>
-                <td><input type="number" step="0.01" value={r.unit_value} onChange={(e) => patchNewRow(r._tmp, { unit_value: e.target.value })} /></td>
-                <td><input type="number" step="0.01" value={r.total_value} onChange={(e) => patchNewRow(r._tmp, { total_value: e.target.value })} /></td>
-                <td><input value={r.country_of_origin} onChange={(e) => patchNewRow(r._tmp, { country_of_origin: e.target.value })} /></td>
-                <td><button onClick={() => removeNewRow(r._tmp)}>×</button></td>
-              </tr>
-            ))}
-            {rows.length === 0 && newRows.length === 0 && (
-              <tr><td colSpan={9} className="muted" style={{ padding: 24, textAlign: 'center' }}>
-                Chưa có items trong Data sửa. Upload ảnh ở Bước 1 hoặc bấm "+ Thêm dòng" thủ công.
-              </td></tr>
-            )}
-          </tbody>
-          {(rows.length > 0 || newRows.length > 0) && (
-            <tfoot>
-              <tr style={{ background: 'var(--bg-tertiary)', fontWeight: 600 }}>
-                <td colSpan={3}>TOTAL</td>
-                <td>{totalQty.toLocaleString('en-US')}</td>
-                <td colSpan={2}></td>
-                <td>{totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currency}</td>
-                <td colSpan={2}></td>
-              </tr>
-            </tfoot>
-          )}
-        </table>
-      </div>
+      {groups.length === 0 && (
+        <div className="card muted" style={{ textAlign: 'center', padding: 32 }}>
+          Chưa có items trong Data sửa. Quay lại <strong>Bước 1</strong> upload ảnh, hoặc bấm "+ Thêm dòng thủ công" dưới đây.
+          <div style={{ marginTop: 12 }}>
+            <button onClick={() => addNewRow(null)}>+ Thêm dòng thủ công</button>
+          </div>
+        </div>
+      )}
+
+      {groups.map((g) => {
+        const inv = g.invoice;
+        const groupTotalQty = g.rows.reduce((s, r) => s + Number(r.qty || 0), 0) + g.newRows.reduce((s, r) => s + Number(r.qty || 0), 0);
+        const groupTotalValue = g.rows.reduce((s, r) => s + Number(r.total_value || 0), 0) + g.newRows.reduce((s, r) => s + Number(r.total_value || 0), 0);
+        const key = inv ? `inv-${inv.id}` : 'manual';
+        return (
+          <div key={key} className="card col" style={{ padding: 0, overflow: 'hidden' }}>
+            <div className="row" style={{ padding: 16, gap: 14, borderBottom: '1px solid var(--border)', background: 'var(--bg-tertiary)' }}>
+              {inv ? (
+                <img src={inv.image_url} alt="" onClick={() => setDrawerUrl(inv.image_url)}
+                  style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 'var(--radius-md)', cursor: 'pointer', flexShrink: 0 }} />
+              ) : (
+                <div style={{ width: 80, height: 80, borderRadius: 'var(--radius-md)', background: 'var(--bg-secondary)', border: '1px dashed var(--border-strong)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--text-muted)', fontSize: 11 }}>
+                  Thủ công
+                </div>
+              )}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>
+                  {inv ? `Ảnh #${inv.id}` : 'Items thêm tay (không từ ảnh)'}
+                </div>
+                <div className="muted" style={{ fontSize: 12 }}>
+                  {inv && new Date(inv.scanned_at).toLocaleString('vi-VN')}
+                  {inv?.raw_json?.currency_detected && ` · ${inv.raw_json.currency_detected}`}
+                  {' · '}{g.rows.length + g.newRows.length} dòng
+                  {' · '}{groupTotalQty} qty · {groupTotalValue.toLocaleString('en-US', { maximumFractionDigits: 2 })} {currency}
+                </div>
+              </div>
+              <button onClick={() => addNewRow(inv ? inv.id : null)}>+ Thêm dòng</button>
+            </div>
+            <div style={{ overflow: 'auto' }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 50 }}>#</th>
+                    <th>Tên VN</th>
+                    <th>Tên EN</th>
+                    <th style={{ width: 80 }}>SL</th>
+                    <th style={{ width: 80 }}>ĐV</th>
+                    <th style={{ width: 130 }}>Đơn giá ({currency})</th>
+                    <th style={{ width: 130 }}>Tổng ({currency})</th>
+                    <th style={{ width: 90 }}>Country</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {g.rows.map((r) => (
+                    <tr key={r.id}>
+                      <td><input type="number" value={r.line_no || ''} onChange={(e) => patchRow(r.id, { line_no: Number(e.target.value) })} style={{ width: 50 }} /></td>
+                      <td><input value={r.name_vn || ''} onChange={(e) => patchRow(r.id, { name_vn: e.target.value })} /></td>
+                      <td><input value={r.name_en || ''} onChange={(e) => patchRow(r.id, { name_en: e.target.value })} /></td>
+                      <td><input type="number" step="0.001" value={r.qty || ''} onChange={(e) => patchRow(r.id, { qty: e.target.value })} /></td>
+                      <td><input value={r.unit || ''} onChange={(e) => patchRow(r.id, { unit: e.target.value })} /></td>
+                      <td><input type="number" step="0.01" value={r.unit_value || ''} onChange={(e) => patchRow(r.id, { unit_value: e.target.value })} /></td>
+                      <td><input type="number" step="0.01" value={r.total_value || ''} onChange={(e) => patchRow(r.id, { total_value: e.target.value })} /></td>
+                      <td><input value={r.country_of_origin || ''} onChange={(e) => patchRow(r.id, { country_of_origin: e.target.value })} /></td>
+                      <td><button className="danger" onClick={() => deleteRow(r.id)}>×</button></td>
+                    </tr>
+                  ))}
+                  {g.newRows.map((r) => (
+                    <tr key={r._tmp} style={{ background: 'rgba(22,163,74,0.06)' }}>
+                      <td><input type="number" value={r.line_no} onChange={(e) => patchNewRow(r._tmp, { line_no: Number(e.target.value) })} style={{ width: 50 }} /></td>
+                      <td><input value={r.name_vn} onChange={(e) => patchNewRow(r._tmp, { name_vn: e.target.value })} /></td>
+                      <td><input value={r.name_en} onChange={(e) => patchNewRow(r._tmp, { name_en: e.target.value })} /></td>
+                      <td><input type="number" step="0.001" value={r.qty} onChange={(e) => patchNewRow(r._tmp, { qty: e.target.value })} /></td>
+                      <td><input value={r.unit} onChange={(e) => patchNewRow(r._tmp, { unit: e.target.value })} /></td>
+                      <td><input type="number" step="0.01" value={r.unit_value} onChange={(e) => patchNewRow(r._tmp, { unit_value: e.target.value })} /></td>
+                      <td><input type="number" step="0.01" value={r.total_value} onChange={(e) => patchNewRow(r._tmp, { total_value: e.target.value })} /></td>
+                      <td><input value={r.country_of_origin} onChange={(e) => patchNewRow(r._tmp, { country_of_origin: e.target.value })} /></td>
+                      <td><button onClick={() => removeNewRow(r._tmp)}>×</button></td>
+                    </tr>
+                  ))}
+                  {g.rows.length === 0 && g.newRows.length === 0 && (
+                    <tr><td colSpan={9} className="muted" style={{ padding: 16, textAlign: 'center' }}>
+                      Không có items từ ảnh này.
+                    </td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
+
+      <ImageDrawer url={drawerUrl} title={`Ảnh hóa đơn — ${customer.name}`} onClose={() => setDrawerUrl(null)} />
     </div>
   );
 }
@@ -642,6 +708,16 @@ function CommercialInvoiceTab({ shipmentId, customer, onReload }) {
       alert('Lỗi: ' + (e.data?.message || e.message));
     } finally {
       setPromoting(false);
+    }
+  }
+
+  async function normalizeUnits() {
+    try {
+      const r = await api.normalizeCIUnits(shipmentId, customer.id);
+      await load();
+      alert(`Đã convert ${r.changed}/${r.scanned} đơn vị sang English.`);
+    } catch (e) {
+      alert('Lỗi: ' + (e.data?.message || e.message));
     }
   }
 
@@ -745,6 +821,7 @@ function CommercialInvoiceTab({ shipmentId, customer, onReload }) {
               <>
                 <button onClick={() => promote('append')} disabled={promoting} title="Thêm items từ Data sửa vào sau danh sách hiện tại">+ Append từ Data sửa</button>
                 <button className="danger" onClick={() => promote('replace')} disabled={promoting} title="Xoá hết items CI, tạo lại từ Data sửa">↻ Tạo lại từ Data sửa</button>
+                <button onClick={normalizeUnits} title="Convert hết đơn vị VN sang EN (Cái→PCS, Bộ→SET, ...)">🔤 Chuẩn hoá đơn vị</button>
                 <button onClick={addNewRow}>+ Thêm dòng</button>
                 <button className="primary" disabled={!hasDirty || loading} onClick={saveAll}>
                   {loading ? 'Đang lưu…' : 'Lưu thay đổi'}

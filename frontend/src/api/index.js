@@ -75,6 +75,9 @@ export const api = {
   // Promote raw → CI with currency conversion
   promoteToCI: (shipId, customerId, mode = 'replace') =>
     request(`/api/sea-shipments/${shipId}/customers/${customerId}/promote-to-ci`, { method: 'POST', body: { mode } }),
+  // Normalize all CI units to English
+  normalizeCIUnits: (shipId, customerId) =>
+    request(`/api/sea-shipments/${shipId}/customers/${customerId}/normalize-ci-units`, { method: 'POST' }),
 
   // Bước 4 — Commercial Invoice (USD)
   listItems: (id, customer_id) =>

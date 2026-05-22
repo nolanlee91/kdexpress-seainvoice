@@ -498,6 +498,61 @@ label:not(.btn) {
   background: rgba(15, 23, 42, 0.20);
 }
 
+/* === Drawer (right slide-in) === */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: drawerFadeIn 160ms ease;
+}
+.drawer-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: min(640px, 90vw);
+  z-index: 100;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: -12px 0 48px rgba(15, 23, 42, 0.15);
+  display: flex;
+  flex-direction: column;
+  animation: drawerSlideIn 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.drawer-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.drawer-body {
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+.drawer-body img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+@keyframes drawerFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes drawerSlideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
 /* === Page transition === */
 @keyframes pageEnter {
   from { opacity: 0; transform: translateY(6px); }
