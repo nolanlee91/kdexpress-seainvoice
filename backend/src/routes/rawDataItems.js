@@ -1,7 +1,7 @@
 const express = require('express');
 const { query, pool } = require('../db');
 const { authRequired } = require('../middleware/auth');
-const { translateNames } = require('../services/gemini');
+const { translateNames, suggestMetadata } = require('../services/gemini');
 const { translateUnit } = require('../utils/units');
 
 const router = express.Router();
@@ -42,8 +42,9 @@ router.post('/raw-data-items/bulk', async (req, res) => {
           `UPDATE raw_data_items SET
               line_no = $1, name_vn = $2, name_en = $3, qty = $4, unit = $5,
               unit_value = $6, total_value = $7, country_of_origin = $8,
+              material = $9, hs_code_ca = $10, hs_code_vn = $11,
               updated_at = NOW()
-            WHERE id = $9 AND sea_shipment_id = $10 AND customer_id = $11
+            WHERE id = $12 AND sea_shipment_id = $13 AND customer_id = $14
           RETURNING *`,
           [
             it.line_no || 0, it.name_vn || '', it.name_en || '',
@@ -51,6 +52,7 @@ router.post('/raw-data-items/bulk', async (req, res) => {
             it.unit_value || 0,
             it.total_value != null ? it.total_value : Number(it.qty || 0) * Number(it.unit_value || 0),
             it.country_of_origin || 'VIETNAM',
+            it.material || null, it.hs_code_ca || null, it.hs_code_vn || null,
             it.id, sea_shipment_id, customer_id,
           ]
         );
@@ -59,8 +61,9 @@ router.post('/raw-data-items/bulk', async (req, res) => {
         const { rows } = await client.query(
           `INSERT INTO raw_data_items
             (sea_shipment_id, customer_id, source_invoice_id, line_no,
-             name_vn, name_en, qty, unit, unit_value, total_value, country_of_origin)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+             name_vn, name_en, qty, unit, unit_value, total_value, country_of_origin,
+             material, hs_code_ca, hs_code_vn)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
           [
             sea_shipment_id, customer_id, it.source_invoice_id || null, it.line_no || 0,
             it.name_vn || '', it.name_en || '',
@@ -68,6 +71,7 @@ router.post('/raw-data-items/bulk', async (req, res) => {
             it.unit_value || 0,
             it.total_value != null ? it.total_value : Number(it.qty || 0) * Number(it.unit_value || 0),
             it.country_of_origin || 'VIETNAM',
+            it.material || null, it.hs_code_ca || null, it.hs_code_vn || null,
           ]
         );
         results.push(rows[0]);
@@ -106,6 +110,21 @@ router.post('/raw-data-items/translate', async (req, res) => {
   } catch (e) {
     console.error('[translate] gemini error:', e.message);
     res.status(502).json({ error: 'translate_failed', message: e.message });
+  }
+});
+
+// Suggest material + HS code (Canada + Vietnam) based on name_vn + name_en
+// Body: { items: [{id, name_vn, name_en}, ...] }
+// Trả: { suggestions: [{id, material, hs_code_ca, hs_code_vn}, ...] } (FE update state, manager review rồi Save)
+router.post('/raw-data-items/suggest-metadata', async (req, res) => {
+  const items = (req.body && req.body.items) || [];
+  if (items.length === 0) return res.json({ suggestions: [] });
+  try {
+    const suggestions = await suggestMetadata(items);
+    res.json({ suggestions });
+  } catch (e) {
+    console.error('[suggest-metadata] gemini error:', e.message);
+    res.status(502).json({ error: 'suggest_failed', message: e.message });
   }
 });
 
@@ -187,14 +206,16 @@ router.post('/sea-shipments/:id/customers/:customerId/promote-to-ci', async (req
       const { rows } = await client.query(
         `INSERT INTO commercial_invoice_items
           (sea_shipment_id, customer_id, source_invoice_id, line_no,
-           name_vn, name_en, qty, unit, unit_value_usd, total_value_usd, country_of_origin)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+           name_vn, name_en, qty, unit, unit_value_usd, total_value_usd, country_of_origin,
+           material, hs_code_ca, hs_code_vn)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
         [
           req.params.id, req.params.customerId, raw.source_invoice_id || null, lineNo,
           raw.name_vn || '', raw.name_en || '',
           raw.qty || 0, translateUnit(raw.unit || 'PCS'),
           unitUsd, totalUsd,
           raw.country_of_origin || 'VIETNAM',
+          raw.material || null, raw.hs_code_ca || null, raw.hs_code_vn || null,
         ]
       );
       inserted.push(rows[0]);

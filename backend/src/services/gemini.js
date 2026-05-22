@@ -154,4 +154,73 @@ async function translateNames(items) {
   }));
 }
 
-module.exports = { scanInvoice, translateNames };
+// --- Suggest metadata: material + HS code (Canada + Vietnam) ---
+
+const metadataSchema = {
+  type: 'object',
+  properties: {
+    suggestions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          material: { type: 'string' },
+          hs_code_ca: { type: 'string' },
+          hs_code_vn: { type: 'string' },
+        },
+        required: ['id', 'material', 'hs_code_ca', 'hs_code_vn'],
+      },
+    },
+  },
+  required: ['suggestions'],
+};
+
+const METADATA_PROMPT = `Bạn là chuyên viên khai báo hải quan xuất khẩu Việt Nam → Canada. Với mỗi item dưới đây, hãy gợi ý 3 trường:
+
+1. **material**: Chất liệu chính bằng tiếng Anh (vd: "Stainless Steel 304", "Aluminum", "Cast Iron", "Plastic", "Cotton", "Polyester", "Wood", "Glass", "Ceramic", "Paper", "Rattan", "Bamboo", ...). Nếu là máy móc/điện tử thì ghi vật liệu vỏ + công năng chính (vd: "Stainless steel body, electric motor"). Không trả về tiếng Việt.
+
+2. **hs_code_ca**: HS code 10 chữ số theo Canadian Customs Tariff (HSC), format "XXXX.XX.XX.XX" (vd "8210.00.00.10"). Dựa training data nhưng manager sẽ verify, hãy chọn code phù hợp nhất.
+
+3. **hs_code_vn**: HS code 8 chữ số theo biểu thuế xuất nhập khẩu Việt Nam, format "XXXX.XX.XX" (vd "8210.00.00").
+
+Input là mảng JSON [{id, name_vn, name_en}, ...]. Trả [{id, material, hs_code_ca, hs_code_vn}] cùng id.
+
+Lưu ý: HS code là GỢI Ý — không 100% chính xác. Nếu item quá generic không gắn được, trả best-effort guess. Không bỏ trống.`;
+
+async function suggestMetadata(items) {
+  if (!process.env.GEMINI_API_KEY) throw new Error('gemini_not_configured');
+  const input = items.map((it) => ({ id: it.id, name_vn: it.name_vn || '', name_en: it.name_en || '' }));
+  if (input.length === 0) return [];
+
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const model = genAI.getGenerativeModel({
+    model: MODEL,
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: metadataSchema,
+      temperature: 0.1,
+    },
+  });
+
+  const result = await model.generateContent([
+    { text: METADATA_PROMPT },
+    { text: 'Input:\n' + JSON.stringify(input) },
+  ]);
+
+  const text = result.response.text();
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    throw new Error('gemini_invalid_json: ' + text.slice(0, 200));
+  }
+  return (parsed.suggestions || []).map((s) => ({
+    id: Number(s.id),
+    material: String(s.material || '').trim(),
+    hs_code_ca: String(s.hs_code_ca || '').trim(),
+    hs_code_vn: String(s.hs_code_vn || '').trim(),
+  }));
+}
+
+module.exports = { scanInvoice, translateNames, suggestMetadata };

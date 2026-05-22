@@ -59,19 +59,22 @@ async function buildWorkbook(seaShipmentId) {
 
 function buildCommercialInvoiceSheet(ws, ship, customer, items) {
   ws.columns = [
-    { width: 40 },
-    { width: 40 },
-    { width: 10 },
-    { width: 14 },
-    { width: 14 },
-    { width: 16 },
-    { width: 14 },
+    { width: 36 }, // A: name_vn
+    { width: 36 }, // B: name_en
+    { width: 8 },  // C: qty
+    { width: 12 }, // D: unit
+    { width: 14 }, // E: unit value
+    { width: 14 }, // F: total value
+    { width: 12 }, // G: country
+    { width: 22 }, // H: material
+    { width: 16 }, // I: HS Canada
+    { width: 14 }, // J: HS Vietnam
   ];
 
   const r1 = ws.addRow(['COMMERCIAL INVOICE']);
   r1.font = { bold: true, size: 16 };
   r1.alignment = { horizontal: 'center' };
-  ws.mergeCells('A1:G1');
+  ws.mergeCells('A1:J1');
   r1.height = 28;
 
   const senderText = ship.sender_block || 'GEMADEPT LOGISTICS ONE MEMBER CO., LTD';
@@ -80,31 +83,29 @@ function buildCommercialInvoiceSheet(ws, ship, customer, items) {
     : 'Invoice Date:';
   const invoiceMeta = [
     `Sender:\n${senderText}`,
-    '',
-    '',
+    '', '', '', '',
     `${invoiceDateText}\nReason for Export: Sale\nType of Export: Permanent\nTerms of Trade: ExWork`,
   ];
   const r2 = ws.addRow(invoiceMeta);
-  ws.mergeCells('A2:C2');
-  ws.mergeCells('D2:G2');
+  ws.mergeCells('A2:E2');
+  ws.mergeCells('F2:J2');
   r2.alignment = { wrapText: true, vertical: 'top' };
   r2.height = 80;
   r2.getCell(1).border = thinBorderAll();
-  r2.getCell(4).border = thinBorderAll();
+  r2.getCell(6).border = thinBorderAll();
 
   const receiverText = customer.receiver_block || `${customer.name}${customer.address ? '\n' + customer.address : ''}`;
   const r3 = ws.addRow([
     `Receiver:\n${receiverText}`,
-    '',
-    '',
+    '', '', '', '',
     'Duty/taxes acct: Receiver Will Pay\nRequiere Pedimento: No\nDuty/tax billing service: Receiver will pay\nCarrier:',
   ]);
-  ws.mergeCells('A3:C3');
-  ws.mergeCells('D3:G3');
+  ws.mergeCells('A3:E3');
+  ws.mergeCells('F3:J3');
   r3.alignment = { wrapText: true, vertical: 'top' };
   r3.height = 80;
   r3.getCell(1).border = thinBorderAll();
-  r3.getCell(4).border = thinBorderAll();
+  r3.getCell(6).border = thinBorderAll();
 
   const r4 = ws.addRow([
     'Full Description of Goods',
@@ -114,6 +115,9 @@ function buildCommercialInvoiceSheet(ws, ship, customer, items) {
     'Unit Value (USD)',
     'Total Value (USD)',
     'Country of Origin',
+    'Material',
+    'HS Code (Canada)',
+    'HS Code (Vietnam)',
   ]);
   ws.mergeCells('A4:B4');
   r4.font = { bold: true };
@@ -134,6 +138,9 @@ function buildCommercialInvoiceSheet(ws, ship, customer, items) {
       Number(it.unit_value_usd || 0),
       { formula: `C${rowNum}*E${rowNum}` },
       it.country_of_origin || 'VIETNAM',
+      it.material || '',
+      it.hs_code_ca || '',
+      it.hs_code_vn || '',
     ]);
     r.alignment = { wrapText: true, vertical: 'top' };
     r.getCell(3).numFmt = 'General';
@@ -150,7 +157,7 @@ function buildCommercialInvoiceSheet(ws, ship, customer, items) {
       { formula: `SUM(C${dataStart}:C${dataEnd})` },
       '', '',
       { formula: `SUM(F${dataStart}:F${dataEnd})` },
-      '',
+      '', '', '', '',
     ]);
     ws.mergeCells(`A${totalRow.number}:B${totalRow.number}`);
     totalRow.font = { bold: true };
@@ -164,7 +171,7 @@ function buildCommercialInvoiceSheet(ws, ship, customer, items) {
   const certifyRow = ws.addRow([
     `I/We hereby certify that the information contained in the invoice is true and correct and that the contents of this shipment are as stated above.\nName: Signature: Position: Shipping Agent\nDate of signature: ${certifyDate}`,
   ]);
-  ws.mergeCells(`A${certifyRow.number}:G${certifyRow.number}`);
+  ws.mergeCells(`A${certifyRow.number}:J${certifyRow.number}`);
   certifyRow.alignment = { wrapText: true, vertical: 'top' };
   certifyRow.height = 60;
   certifyRow.getCell(1).border = thinBorderAll();

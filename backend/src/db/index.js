@@ -134,6 +134,14 @@ async function initDB() {
   await query(`CREATE INDEX IF NOT EXISTS idx_invoices_ship_customer ON invoices(sea_shipment_id, customer_id);`);
   await query(`CREATE INDEX IF NOT EXISTS idx_ci_items_ship_customer ON commercial_invoice_items(sea_shipment_id, customer_id, line_no);`);
 
+  // Material + HS codes for customs declaration (added 2026-05-22)
+  await query(`ALTER TABLE raw_data_items ADD COLUMN IF NOT EXISTS material TEXT;`);
+  await query(`ALTER TABLE raw_data_items ADD COLUMN IF NOT EXISTS hs_code_ca VARCHAR(32);`);
+  await query(`ALTER TABLE raw_data_items ADD COLUMN IF NOT EXISTS hs_code_vn VARCHAR(32);`);
+  await query(`ALTER TABLE commercial_invoice_items ADD COLUMN IF NOT EXISTS material TEXT;`);
+  await query(`ALTER TABLE commercial_invoice_items ADD COLUMN IF NOT EXISTS hs_code_ca VARCHAR(32);`);
+  await query(`ALTER TABLE commercial_invoice_items ADD COLUMN IF NOT EXISTS hs_code_vn VARCHAR(32);`);
+
   const { rows } = await query(`SELECT id FROM users WHERE code = $1`, ['admin']);
   if (rows.length === 0) {
     await query(

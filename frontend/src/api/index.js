@@ -67,6 +67,8 @@ export const api = {
   deleteRawItem: (id) => request('/api/raw-data-items/' + id, { method: 'DELETE' }),
   translateRawItems: (items) =>
     request('/api/raw-data-items/translate', { method: 'POST', body: { items } }),
+  suggestMetadata: (items) =>
+    request('/api/raw-data-items/suggest-metadata', { method: 'POST', body: { items } }),
 
   // Settings per (shipment, customer): currency, exchange rate
   updateCustomerSettings: (shipId, customerId, b) =>

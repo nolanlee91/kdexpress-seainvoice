@@ -358,9 +358,11 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
   const [rate, setRate] = useState(customer.exchange_rate_vnd_per_usd || '');
   const [loading, setLoading] = useState(false);
   const [translating, setTranslating] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
   const [resetting, setResetting] = useState(null); // invoice_id đang reset
   const [savedMsg, setSavedMsg] = useState('');
   const [translateMsg, setTranslateMsg] = useState('');
+  const [suggestMsg, setSuggestMsg] = useState('');
   const [drawerUrl, setDrawerUrl] = useState(null);
 
   async function load() {
@@ -395,6 +397,7 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
       line_no: rows.length + n.length + 1,
       name_vn: '', name_en: '', qty: 1, unit: 'PCS',
       unit_value: 0, total_value: 0, country_of_origin: 'VIETNAM',
+      material: '', hs_code_ca: '', hs_code_vn: '',
     }]);
   }
   function patchNewRow(tmp, patch) {
@@ -463,6 +466,42 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
     }
   }
 
+  async function suggestMissing() {
+    // Lấy các dòng chưa có material HOẶC chưa có hs_code_ca
+    const needSuggest = [
+      ...rows.filter((r) => !r.material || !r.hs_code_ca).map((r) => ({ id: r.id, name_vn: r.name_vn || '', name_en: r.name_en || '' })),
+      ...newRows.filter((r) => !r.material || !r.hs_code_ca).map((r) => ({ id: r._tmp, name_vn: r.name_vn || '', name_en: r.name_en || '' })),
+    ];
+    if (needSuggest.length === 0) {
+      setSuggestMsg('Tất cả dòng đã có material + HS code.');
+      setTimeout(() => setSuggestMsg(''), 3000);
+      return;
+    }
+    setSuggesting(true); setSuggestMsg('');
+    try {
+      const { suggestions } = await api.suggestMetadata(needSuggest);
+      const map = new Map(suggestions.map((s) => [s.id, s]));
+      setRows((rs) => rs.map((r) => {
+        const s = map.get(r.id);
+        if (s) {
+          setDirty((d) => ({ ...d, [r.id]: true }));
+          return { ...r, material: s.material, hs_code_ca: s.hs_code_ca, hs_code_vn: s.hs_code_vn };
+        }
+        return r;
+      }));
+      setNewRows((ns) => ns.map((r) => {
+        const s = map.get(r._tmp);
+        return s ? { ...r, material: s.material, hs_code_ca: s.hs_code_ca, hs_code_vn: s.hs_code_vn } : r;
+      }));
+      setSuggestMsg(`✓ Đã gợi ý ${suggestions.length} dòng (material + HS code) — review xong bấm 💾 Lưu để áp dụng.`);
+      setTimeout(() => setSuggestMsg(''), 6000);
+    } catch (e) {
+      setSuggestMsg('Lỗi: ' + (e.data?.message || e.message));
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
   async function saveAll() {
     setLoading(true); setSavedMsg('');
     try {
@@ -479,6 +518,7 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
             qty: r.qty, unit: r.unit,
             unit_value: r.unit_value, total_value: r.total_value,
             country_of_origin: r.country_of_origin,
+            material: r.material, hs_code_ca: r.hs_code_ca, hs_code_vn: r.hs_code_vn,
           });
         }
       }
@@ -489,6 +529,7 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
           qty: r.qty, unit: r.unit,
           unit_value: r.unit_value, total_value: r.total_value,
           country_of_origin: r.country_of_origin,
+          material: r.material, hs_code_ca: r.hs_code_ca, hs_code_vn: r.hs_code_vn,
         });
       }
       await api.bulkRawItems({
@@ -561,6 +602,10 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
             <button onClick={translateMissing} disabled={translating} title="Dùng AI dịch các dòng có name_vn nhưng name_en trống">
               {translating ? 'Đang dịch…' : '🌐 Dịch tiếng Anh (AI)'}
             </button>
+            <button onClick={suggestMissing} disabled={suggesting} style={{ marginLeft: 8 }}
+              title="Dùng AI gợi ý Material + HS Code (Canada + Vietnam) cho các dòng chưa có">
+              {suggesting ? 'Đang gợi ý…' : '🔍 Gợi ý HS + Chất liệu (AI)'}
+            </button>
             <button className="primary" disabled={(!hasDirty && !settingsChanged) || loading} onClick={saveAll} style={{ marginLeft: 8 }}>
               {loading ? 'Đang lưu…' : '💾 Lưu Data sửa'}
             </button>
@@ -568,6 +613,7 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
         </div>
         {savedMsg && <div className="success">{savedMsg}</div>}
         {translateMsg && <div className={translateMsg.startsWith('Lỗi') ? 'error' : 'success'}>{translateMsg}</div>}
+        {suggestMsg && <div className={suggestMsg.startsWith('Lỗi') ? 'error' : 'success'}>{suggestMsg}</div>}
         <div className="row" style={{ justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: 12, fontSize: 13 }}>
           <span className="muted">Tổng cộng <strong>{rows.length + newRows.length}</strong> dòng</span>
           <span><strong>{totalQty.toLocaleString('en-US')}</strong> qty · <strong>{totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> {currency}</span>
@@ -632,6 +678,9 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
                     <th style={{ width: 130 }}>Đơn giá ({currency})</th>
                     <th style={{ width: 130 }}>Tổng ({currency})</th>
                     <th style={{ width: 90 }}>Country</th>
+                    <th style={{ width: 160 }}>Material</th>
+                    <th style={{ width: 130 }}>HS Code CA</th>
+                    <th style={{ width: 110 }}>HS Code VN</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -646,6 +695,9 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
                       <td><input type="number" step="0.01" value={r.unit_value || ''} onChange={(e) => patchRow(r.id, { unit_value: e.target.value })} /></td>
                       <td><input type="number" step="0.01" value={r.total_value || ''} onChange={(e) => patchRow(r.id, { total_value: e.target.value })} /></td>
                       <td><input value={r.country_of_origin || ''} onChange={(e) => patchRow(r.id, { country_of_origin: e.target.value })} /></td>
+                      <td><input value={r.material || ''} onChange={(e) => patchRow(r.id, { material: e.target.value })} placeholder="vd: Stainless Steel" /></td>
+                      <td><input value={r.hs_code_ca || ''} onChange={(e) => patchRow(r.id, { hs_code_ca: e.target.value })} className="mono" placeholder="XXXX.XX.XX.XX" /></td>
+                      <td><input value={r.hs_code_vn || ''} onChange={(e) => patchRow(r.id, { hs_code_vn: e.target.value })} className="mono" placeholder="XXXX.XX.XX" /></td>
                       <td><button className="danger" onClick={() => deleteRow(r.id)}>×</button></td>
                     </tr>
                   ))}
@@ -659,11 +711,14 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
                       <td><input type="number" step="0.01" value={r.unit_value} onChange={(e) => patchNewRow(r._tmp, { unit_value: e.target.value })} /></td>
                       <td><input type="number" step="0.01" value={r.total_value} onChange={(e) => patchNewRow(r._tmp, { total_value: e.target.value })} /></td>
                       <td><input value={r.country_of_origin} onChange={(e) => patchNewRow(r._tmp, { country_of_origin: e.target.value })} /></td>
+                      <td><input value={r.material || ''} onChange={(e) => patchNewRow(r._tmp, { material: e.target.value })} placeholder="vd: Stainless Steel" /></td>
+                      <td><input value={r.hs_code_ca || ''} onChange={(e) => patchNewRow(r._tmp, { hs_code_ca: e.target.value })} className="mono" placeholder="XXXX.XX.XX.XX" /></td>
+                      <td><input value={r.hs_code_vn || ''} onChange={(e) => patchNewRow(r._tmp, { hs_code_vn: e.target.value })} className="mono" placeholder="XXXX.XX.XX" /></td>
                       <td><button onClick={() => removeNewRow(r._tmp)}>×</button></td>
                     </tr>
                   ))}
                   {g.rows.length === 0 && g.newRows.length === 0 && (
-                    <tr><td colSpan={9} className="muted" style={{ padding: 16, textAlign: 'center' }}>
+                    <tr><td colSpan={12} className="muted" style={{ padding: 16, textAlign: 'center' }}>
                       Không có items từ ảnh này.
                     </td></tr>
                   )}
@@ -739,6 +794,9 @@ function CommercialInvoiceTab({ shipmentId, customer, onReload }) {
               <th style={{ width: 110 }}>Đơn giá USD</th>
               <th style={{ width: 110 }}>Tổng USD</th>
               <th style={{ width: 90 }}>Country</th>
+              <th style={{ width: 160 }}>Material</th>
+              <th style={{ width: 130 }}>HS Code CA</th>
+              <th style={{ width: 110 }}>HS Code VN</th>
             </tr>
           </thead>
           <tbody>
@@ -752,10 +810,13 @@ function CommercialInvoiceTab({ shipmentId, customer, onReload }) {
                 <td>{Number(r.unit_value_usd || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</td>
                 <td>{Number(r.total_value_usd || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 <td>{r.country_of_origin}</td>
+                <td>{r.material || <span className="muted">—</span>}</td>
+                <td className="mono">{r.hs_code_ca || <span className="muted">—</span>}</td>
+                <td className="mono">{r.hs_code_vn || <span className="muted">—</span>}</td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={8} className="muted" style={{ padding: 24, textAlign: 'center' }}>
+              <tr><td colSpan={11} className="muted" style={{ padding: 24, textAlign: 'center' }}>
                 Chưa có CI. Bấm "🪄 Tạo CI từ Data sửa" để bắt đầu.
               </td></tr>
             )}
@@ -767,7 +828,7 @@ function CommercialInvoiceTab({ shipmentId, customer, onReload }) {
                 <td>{totalQty.toLocaleString('en-US')}</td>
                 <td colSpan={2}></td>
                 <td>{totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</td>
-                <td></td>
+                <td colSpan={4}></td>
               </tr>
             </tfoot>
           )}
