@@ -683,21 +683,16 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
 
 function CommercialInvoiceTab({ shipmentId, customer, onReload }) {
   const [rows, setRows] = useState([]);
-  const [dirty, setDirty] = useState({});
-  const [deleteIds, setDeleteIds] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [promoting, setPromoting] = useState(false);
 
   async function load() {
-    const items = await api.listItems(shipmentId, customer.id);
-    setRows(items);
-    setDirty({}); setDeleteIds([]);
+    setRows(await api.listItems(shipmentId, customer.id));
   }
   useEffect(() => { load(); }, [shipmentId, customer.id]);
 
   async function promote() {
     if (rows.length > 0) {
-      if (!confirm('Update sẽ XOÁ HẾT items hiện tại của CI và clone lại từ Data sửa (kèm tự convert VND→USD + chuẩn hoá đơn vị EN). Mọi sửa đổi tinh chỉnh trực tiếp trong CI sẽ mất. Tiếp tục?')) return;
+      if (!confirm('Update sẽ XOÁ HẾT items hiện tại của CI và clone lại từ Data sửa (auto convert VND→USD + chuẩn hoá đơn vị EN). Tiếp tục?')) return;
     }
     setPromoting(true);
     try {
@@ -711,50 +706,6 @@ function CommercialInvoiceTab({ shipmentId, customer, onReload }) {
     }
   }
 
-  function patchRow(id, patch) {
-    setRows((rs) => rs.map((r) => {
-      if (r.id !== id) return r;
-      const updated = { ...r, ...patch };
-      if ('qty' in patch || 'unit_value_usd' in patch) {
-        const q = Number(updated.qty || 0);
-        const u = Number(updated.unit_value_usd || 0);
-        updated.total_value_usd = Math.round(q * u * 100) / 100;
-      }
-      return updated;
-    }));
-    setDirty((d) => ({ ...d, [id]: true }));
-  }
-  function deleteRow(id) {
-    setRows((rs) => rs.filter((r) => r.id !== id));
-    setDeleteIds((ds) => [...ds, id]);
-  }
-
-  async function saveAll() {
-    setLoading(true);
-    try {
-      const upserts = rows
-        .filter((r) => dirty[r.id])
-        .map((r) => ({
-          id: r.id, line_no: r.line_no, name_vn: r.name_vn, name_en: r.name_en,
-          qty: r.qty, unit: r.unit,
-          unit_value_usd: r.unit_value_usd, total_value_usd: r.total_value_usd,
-          country_of_origin: r.country_of_origin,
-        }));
-      await api.bulkItems({
-        sea_shipment_id: Number(shipmentId),
-        customer_id: customer.id,
-        upserts,
-        delete_ids: deleteIds,
-      });
-      await load(); onReload();
-    } catch (e) {
-      alert('Lỗi lưu: ' + e.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const hasDirty = Object.keys(dirty).length > 0 || deleteIds.length > 0;
   const totalQty = rows.reduce((s, r) => s + Number(r.qty || 0), 0);
   const totalUsd = rows.reduce((s, r) => s + Number(r.total_value_usd || 0), 0);
 
@@ -765,21 +716,14 @@ function CommercialInvoiceTab({ shipmentId, customer, onReload }) {
           <div>
             <strong>Bước 4 — Commercial Invoice cho {customer.name} (USD)</strong>
             <div className="muted">
-              Output snapshot từ Data sửa: auto convert VND→USD theo tỷ giá B3 + chuẩn hoá đơn vị sang EN.
-              Có thể tinh chỉnh inline trước khi xuất Excel, nhưng nếu cần sửa nhiều thì quay lại Bước 3.
+              Output read-only từ Data sửa: auto convert VND→USD theo tỷ giá B3 + chuẩn hoá đơn vị sang EN.
+              Cần sửa items → quay lại Bước 3 rồi bấm Update.
             </div>
           </div>
-          <div className="row" style={{ gap: 6 }}>
-            <button className="primary" disabled={promoting} onClick={promote}
-              title={rows.length === 0 ? 'Tạo CI lần đầu từ Data sửa' : 'Update CI = clone lại từ Data sửa hiện tại'}>
-              {promoting ? 'Đang xử lý…' : (rows.length === 0 ? '🪄 Tạo CI từ Data sửa' : '🔄 Update theo Data sửa')}
-            </button>
-            {rows.length > 0 && (
-              <button className="primary" disabled={!hasDirty || loading} onClick={saveAll}>
-                {loading ? 'Đang lưu…' : 'Lưu thay đổi'}
-              </button>
-            )}
-          </div>
+          <button className="primary" disabled={promoting} onClick={promote}
+            title={rows.length === 0 ? 'Tạo CI lần đầu từ Data sửa' : 'Update CI = clone lại từ Data sửa hiện tại'}>
+            {promoting ? 'Đang xử lý…' : (rows.length === 0 ? '🪄 Tạo CI từ Data sửa' : '🔄 Update theo Data sửa')}
+          </button>
         </div>
       </div>
 
@@ -795,25 +739,23 @@ function CommercialInvoiceTab({ shipmentId, customer, onReload }) {
               <th style={{ width: 110 }}>Đơn giá USD</th>
               <th style={{ width: 110 }}>Tổng USD</th>
               <th style={{ width: 90 }}>Country</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.id}>
-                <td><input type="number" value={r.line_no || ''} onChange={(e) => patchRow(r.id, { line_no: Number(e.target.value) })} style={{ width: 50 }} /></td>
-                <td><input value={r.name_vn || ''} onChange={(e) => patchRow(r.id, { name_vn: e.target.value })} /></td>
-                <td><input value={r.name_en || ''} onChange={(e) => patchRow(r.id, { name_en: e.target.value })} /></td>
-                <td><input type="number" step="0.001" value={r.qty || ''} onChange={(e) => patchRow(r.id, { qty: e.target.value })} /></td>
-                <td><input value={r.unit || ''} onChange={(e) => patchRow(r.id, { unit: e.target.value })} /></td>
-                <td><input type="number" step="0.0001" value={r.unit_value_usd || ''} onChange={(e) => patchRow(r.id, { unit_value_usd: e.target.value })} /></td>
-                <td><input type="number" step="0.01" value={r.total_value_usd || ''} onChange={(e) => patchRow(r.id, { total_value_usd: e.target.value })} /></td>
-                <td><input value={r.country_of_origin || ''} onChange={(e) => patchRow(r.id, { country_of_origin: e.target.value })} /></td>
-                <td><button className="danger" onClick={() => deleteRow(r.id)}>×</button></td>
+                <td>{r.line_no}</td>
+                <td>{r.name_vn || <span className="muted">—</span>}</td>
+                <td>{r.name_en || <span className="muted">—</span>}</td>
+                <td>{Number(r.qty || 0).toLocaleString('en-US')}</td>
+                <td>{r.unit}</td>
+                <td>{Number(r.unit_value_usd || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</td>
+                <td>{Number(r.total_value_usd || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td>{r.country_of_origin}</td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={9} className="muted" style={{ padding: 24, textAlign: 'center' }}>
+              <tr><td colSpan={8} className="muted" style={{ padding: 24, textAlign: 'center' }}>
                 Chưa có CI. Bấm "🪄 Tạo CI từ Data sửa" để bắt đầu.
               </td></tr>
             )}
@@ -825,7 +767,7 @@ function CommercialInvoiceTab({ shipmentId, customer, onReload }) {
                 <td>{totalQty.toLocaleString('en-US')}</td>
                 <td colSpan={2}></td>
                 <td>{totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</td>
-                <td colSpan={2}></td>
+                <td></td>
               </tr>
             </tfoot>
           )}
