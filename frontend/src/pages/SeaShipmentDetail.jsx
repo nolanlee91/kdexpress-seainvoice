@@ -261,27 +261,12 @@ function ScanTab({ shipmentId, customer, onReload }) {
 function RawSnapshotTab({ shipmentId, customer, onReload }) {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [resyncing, setResyncing] = useState(null); // invoice id đang re-sync
   const [drawerUrl, setDrawerUrl] = useState(null);
 
   async function load() {
     setInvoices(await api.listInvoices(shipmentId, customer.id));
   }
   useEffect(() => { load(); }, [shipmentId, customer.id]);
-
-  async function resync(invId) {
-    if (!confirm('Đồng bộ Data sửa = Data gốc của ảnh này? Items đã sửa của ảnh này trong bước 3 sẽ bị ghi đè.')) return;
-    setResyncing(invId);
-    try {
-      await api.restoreInvoice(invId);
-      await load(); onReload();
-      alert('Đã đồng bộ Data sửa từ Data gốc. Mở tab "Bước 3 · Data sửa" để xem.');
-    } catch (e) {
-      alert('Lỗi: ' + (e.data?.message || e.message));
-    } finally {
-      setResyncing(null);
-    }
-  }
 
   const totalItems = invoices.reduce((s, inv) => s + (inv.raw_json?.items?.length || 0), 0);
 
@@ -290,8 +275,8 @@ function RawSnapshotTab({ shipmentId, customer, onReload }) {
       <div className="card col">
         <strong>Bước 2 — Data gốc (read-only, từ AI scan)</strong>
         <div className="muted">
-          Đây là snapshot <strong>bất biến</strong> output của AI khi scan ảnh. KHÔNG sửa được ở đây.
-          Muốn sửa thì mở tab <strong>Bước 3 · Data sửa</strong>. Có thể đồng bộ ngược (Data sửa ← Data gốc) qua nút "↻ Reset Data sửa" của từng ảnh.
+          Snapshot <strong>bất biến</strong> output của AI khi scan ảnh. KHÔNG sửa được ở đây.
+          Muốn sửa items → mở tab <strong>Bước 3 · Data sửa</strong>. Nếu muốn hoàn tác sửa đổi cho 1 ảnh cụ thể, vào Bước 3 và bấm nút "↻ Reset về Data gốc" của card ảnh đó.
         </div>
         <div className="muted">
           Tổng cộng <strong>{invoices.length} ảnh · {totalItems} dòng items</strong> trong Data gốc.
@@ -304,28 +289,22 @@ function RawSnapshotTab({ shipmentId, customer, onReload }) {
 
       {invoices.filter((i) => i.status === 'scanned' && i.raw_json?.items).map((inv) => (
         <div key={inv.id} className="card col">
-          <div className="row" style={{ justifyContent: 'space-between' }}>
-            <div className="row" style={{ gap: 12 }}>
-              <img src={inv.image_url} alt="" onClick={() => setDrawerUrl(inv.image_url)}
-                style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 4, cursor: 'pointer' }} />
-              <div>
-                <div style={{ fontWeight: 500 }}>
-                  Ảnh #{inv.id}
-                  {inv.raw_json?.currency_detected && (
-                    <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
-                      Tiền tệ: {inv.raw_json.currency_detected}
-                    </span>
-                  )}
-                </div>
-                <div className="muted" style={{ fontSize: 12 }}>
-                  {new Date(inv.scanned_at).toLocaleString('vi-VN')} · {inv.raw_json.items.length} dòng
-                </div>
+          <div className="row" style={{ gap: 12 }}>
+            <img src={inv.image_url} alt="" onClick={() => setDrawerUrl(inv.image_url)}
+              style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 4, cursor: 'pointer' }} />
+            <div>
+              <div style={{ fontWeight: 500 }}>
+                Ảnh #{inv.id}
+                {inv.raw_json?.currency_detected && (
+                  <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
+                    Tiền tệ: {inv.raw_json.currency_detected}
+                  </span>
+                )}
+              </div>
+              <div className="muted" style={{ fontSize: 12 }}>
+                {new Date(inv.scanned_at).toLocaleString('vi-VN')} · {inv.raw_json.items.length} dòng
               </div>
             </div>
-            <button onClick={() => resync(inv.id)} disabled={resyncing === inv.id}
-              title="Ghi đè items trong Data sửa của ảnh này bằng Data gốc">
-              {resyncing === inv.id ? 'Đang đồng bộ…' : '↻ Reset Data sửa từ ảnh này'}
-            </button>
           </div>
           <div style={{ overflow: 'auto', maxHeight: 400, border: '1px solid #1a2138', borderRadius: 6 }}>
             <table className="table">
@@ -379,6 +358,7 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
   const [rate, setRate] = useState(customer.exchange_rate_vnd_per_usd || '');
   const [loading, setLoading] = useState(false);
   const [translating, setTranslating] = useState(false);
+  const [resetting, setResetting] = useState(null); // invoice_id đang reset
   const [savedMsg, setSavedMsg] = useState('');
   const [translateMsg, setTranslateMsg] = useState('');
   const [drawerUrl, setDrawerUrl] = useState(null);
@@ -433,6 +413,19 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
   }
   function removeNewRow(tmp) {
     setNewRows((n) => n.filter((r) => r._tmp !== tmp));
+  }
+
+  async function resetFromRaw(invId) {
+    if (!confirm('Khôi phục items của ảnh này về Data gốc AI scan? Mọi sửa đổi của ảnh này trong Data sửa sẽ mất.')) return;
+    setResetting(invId);
+    try {
+      await api.restoreInvoice(invId);
+      await load(); onReload();
+    } catch (e) {
+      alert('Lỗi: ' + (e.data?.message || e.message));
+    } finally {
+      setResetting(null);
+    }
   }
 
   async function translateMissing() {
@@ -617,7 +610,15 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
                   {' · '}{groupTotalQty} qty · {groupTotalValue.toLocaleString('en-US', { maximumFractionDigits: 2 })} {currency}
                 </div>
               </div>
-              <button onClick={() => addNewRow(inv ? inv.id : null)}>+ Thêm dòng</button>
+              <div className="row" style={{ gap: 6 }}>
+                {inv && (
+                  <button onClick={() => resetFromRaw(inv.id)} disabled={resetting === inv.id}
+                    title="Khôi phục items của ảnh này về Data gốc (output AI). Mọi sửa đổi sẽ mất.">
+                    {resetting === inv.id ? 'Đang reset…' : '↻ Reset về Data gốc'}
+                  </button>
+                )}
+                <button onClick={() => addNewRow(inv ? inv.id : null)}>+ Thêm dòng</button>
+              </div>
             </div>
             <div style={{ overflow: 'auto' }}>
               <table className="table">
