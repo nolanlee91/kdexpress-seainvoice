@@ -64,22 +64,17 @@ export default function SeaShipmentDetail() {
   return (
     <div className="col" style={{ gap: 20 }}>
       <header>
-        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <p className="page-eyebrow">
-              <Link to="/shipments" style={{ color: 'var(--text-muted)' }}>← Chuyến hàng biển</Link>
-            </p>
-            <h1 className="page-title mono">{ship.code}</h1>
-            <p className="page-subtitle">
-              {ship.invoice_date ? `Ngày invoice: ${new Date(ship.invoice_date).toLocaleDateString('vi-VN')}` : 'Chưa đặt ngày invoice'}
-              {' · '}
-              <span className={'badge ' + (ship.status === 'finalized' ? 'badge-success' : 'badge-slate')}>
-                {(ship.status || 'draft').toUpperCase()}
-              </span>
-            </p>
-          </div>
-          <button className="primary" onClick={downloadExcel}>📥 Xuất Excel</button>
-        </div>
+        <p className="page-eyebrow">
+          <Link to="/shipments" style={{ color: 'var(--text-muted)' }}>← Chuyến hàng biển</Link>
+        </p>
+        <h1 className="page-title mono">{ship.code}</h1>
+        <p className="page-subtitle">
+          {ship.invoice_date ? `Ngày invoice: ${new Date(ship.invoice_date).toLocaleDateString('vi-VN')}` : 'Chưa đặt ngày invoice'}
+          {' · '}
+          <span className={'badge ' + (ship.status === 'finalized' ? 'badge-success' : 'badge-slate')}>
+            {(ship.status || 'draft').toUpperCase()}
+          </span>
+        </p>
       </header>
 
       <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 20 }}>
@@ -156,7 +151,7 @@ export default function SeaShipmentDetail() {
               {tab === 'scan' && <ScanTab shipmentId={id} customer={activeCustomer} onReload={loadShip} />}
               {tab === 'raw' && <RawSnapshotTab shipmentId={id} customer={activeCustomer} onReload={loadShip} />}
               {tab === 'edit' && <EditedDataTab shipmentId={id} customer={activeCustomer} onReload={loadShip} />}
-              {tab === 'ci' && <CommercialInvoiceTab shipmentId={id} customer={activeCustomer} onReload={loadShip} />}
+              {tab === 'ci' && <CommercialInvoiceTab shipmentId={id} customer={activeCustomer} onReload={loadShip} onDownload={downloadExcel} />}
             </>
           )}
         </div>
@@ -736,7 +731,7 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
 
 /* ───────────────────────── Bước 4 · Commercial Invoice ───────────────────────── */
 
-function CommercialInvoiceTab({ shipmentId, customer, onReload }) {
+function CommercialInvoiceTab({ shipmentId, customer, onReload, onDownload }) {
   const [rows, setRows] = useState([]);
   const [promoting, setPromoting] = useState(false);
 
@@ -775,10 +770,17 @@ function CommercialInvoiceTab({ shipmentId, customer, onReload }) {
               Cần sửa items → quay lại Bước 3 rồi bấm Update.
             </div>
           </div>
-          <button className="primary" disabled={promoting} onClick={promote}
-            title={rows.length === 0 ? 'Tạo CI lần đầu từ Data sửa' : 'Update CI = clone lại từ Data sửa hiện tại'}>
-            {promoting ? 'Đang xử lý…' : (rows.length === 0 ? '🪄 Tạo CI từ Data sửa' : '🔄 Update theo Data sửa')}
-          </button>
+          <div className="row" style={{ gap: 6 }}>
+            <button className="primary" disabled={promoting} onClick={promote}
+              title={rows.length === 0 ? 'Tạo CI lần đầu từ Data sửa' : 'Update CI = clone lại từ Data sửa hiện tại'}>
+              {promoting ? 'Đang xử lý…' : (rows.length === 0 ? '🪄 Tạo CI từ Data sửa' : '🔄 Update theo Data sửa')}
+            </button>
+            {rows.length > 0 && onDownload && (
+              <button className="primary" onClick={onDownload} title="Tải Excel Commercial Invoice của toàn bộ chuyến (mọi khách)">
+                📥 Xuất Excel
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
