@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 
@@ -12,6 +13,7 @@ export default function Layout() {
   const { user, logout } = useAuth();
   const nav = useNavigate();
   const location = useLocation();
+  const [sidebarExtra, setSidebarExtra] = useState(null);
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -22,7 +24,7 @@ export default function Layout() {
         </div>
 
         <div className="sidebar-section-label">Operations</div>
-        <nav className="sidebar-nav sidebar-nav-primary">
+        <nav className="sidebar-nav">
           <NavLink to="/shipments" className={({ isActive }) => 'sidebar-link' + (isActive ? ' active' : '')}>
             Chuyến hàng biển
           </NavLink>
@@ -30,6 +32,12 @@ export default function Layout() {
             Khách hàng
           </NavLink>
         </nav>
+
+        {sidebarExtra ? (
+          <div className="sidebar-extra">{sidebarExtra}</div>
+        ) : (
+          <div style={{ flex: 1 }} />
+        )}
 
         <div className="sidebar-section-label">Account</div>
         <nav className="sidebar-nav">
@@ -58,7 +66,7 @@ export default function Layout() {
       </aside>
       <main style={{ flex: 1, overflow: 'auto', padding: 32 }}>
         <div className="page-transition" key={location.pathname}>
-          <Outlet />
+          <Outlet context={{ setSidebarExtra }} />
         </div>
       </main>
     </div>

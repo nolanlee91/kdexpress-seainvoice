@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useOutletContext, Link } from 'react-router-dom';
 import { api } from '../api';
 import ImageUpload from '../components/ImageUpload.jsx';
 import ImageDrawer from '../components/ImageDrawer.jsx';
 
 export default function SeaShipmentDetail() {
   const { id } = useParams();
+  const { setSidebarExtra } = useOutletContext();
   const [ship, setShip] = useState(null);
   const [customers, setCustomers] = useState([]);
   const [allCustomers, setAllCustomers] = useState([]);
@@ -61,6 +62,67 @@ export default function SeaShipmentDetail() {
     (c) => !customers.some((x) => x.id === c.id)
   );
 
+  // Render customer-in-shipment list vào dark sidebar slot
+  useEffect(() => {
+    if (!setSidebarExtra) return;
+    setSidebarExtra(
+      <>
+        <div className="sidebar-section-label">Khách trong chuyến</div>
+        {customers.length === 0 && (
+          <div style={{ color: 'var(--sidebar-text-muted)', fontSize: 12, padding: '4px 20px' }}>
+            Chưa có khách nào.
+          </div>
+        )}
+        {customers.map((c) => (
+          <div
+            key={c.id}
+            className={'sidebar-customer-item' + (activeCustomerId === c.id ? ' active' : '')}
+            onClick={() => setActiveCustomerId(c.id)}
+          >
+            <div className="sidebar-customer-item-name">{c.name}</div>
+            <div className="sidebar-customer-item-meta">
+              {c.invoice_count} ảnh · {c.raw_item_count} sửa · {c.ci_item_count} CI
+            </div>
+            {(c.raw_data_saved_at || c.ci_generated_at) && (
+              <div className="sidebar-customer-item-badges">
+                {c.raw_data_saved_at && <span className="badge badge-success">✓ DATA</span>}
+                {c.ci_generated_at && <span className="badge badge-info">✓ CI</span>}
+              </div>
+            )}
+            <button
+              className="sidebar-customer-item-x"
+              title="Xoá khách khỏi chuyến"
+              onClick={(e) => { e.stopPropagation(); removeCustomer(c.id); }}
+            >×</button>
+          </div>
+        ))}
+        {!addingCustomer && (
+          <button className="sidebar-add-trigger" onClick={() => setAddingCustomer(true)}>+ Thêm khách</button>
+        )}
+        {addingCustomer && (
+          <div className="sidebar-add-form">
+            <select value={pickCustomer} onChange={(e) => setPickCustomer(e.target.value)}>
+              <option value="">— Chọn khách —</option>
+              {availableCustomers.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+              <button onClick={() => setAddingCustomer(false)}>Huỷ</button>
+              <button className="primary" disabled={!pickCustomer} onClick={addCustomerToShipment}>Thêm</button>
+            </div>
+            {availableCustomers.length === 0 && (
+              <div style={{ color: 'var(--sidebar-text-muted)', fontSize: 11 }}>
+                Đã thêm hết khách. <Link to="/customers" style={{ color: 'var(--accent)' }}>Tạo khách mới</Link>
+              </div>
+            )}
+          </div>
+        )}
+      </>
+    );
+    return () => setSidebarExtra(null);
+  }, [customers, activeCustomerId, addingCustomer, pickCustomer, availableCustomers]);
+
   return (
     <div className="col" style={{ gap: 20 }}>
       <header>
@@ -77,88 +139,31 @@ export default function SeaShipmentDetail() {
         </p>
       </header>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 20, alignItems: 'start' }}>
-        {/* Sidebar: Customers in shipment — sticky */}
-        <div className="card col" style={{
-          padding: 16, gap: 8,
-          position: 'sticky', top: 0,
-          maxHeight: 'calc(100vh - 64px)', overflowY: 'auto',
-        }}>
-          <div className="row" style={{ justifyContent: 'space-between', marginBottom: 4 }}>
-            <strong style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.1em' }}>
-              Khách trong chuyến
-            </strong>
-            <button className="ghost" style={{ padding: '0 8px', height: 24, fontSize: 12 }} onClick={() => setAddingCustomer(true)}>+ Thêm</button>
-          </div>
-          {customers.length === 0 && <div className="muted">Chưa có khách nào.</div>}
-          {customers.map((c) => (
-            <div key={c.id} style={{
-              padding: '10px 12px', borderRadius: 'var(--radius-md)', cursor: 'pointer',
-              background: activeCustomerId === c.id ? 'var(--accent-bg)' : 'transparent',
-              border: '1px solid ' + (activeCustomerId === c.id ? 'var(--accent-strong)' : 'transparent'),
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              transition: 'background var(--transition-fast)',
-            }} onClick={() => setActiveCustomerId(c.id)}>
-              <div style={{ overflow: 'hidden', flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: activeCustomerId === c.id ? 600 : 500, color: 'var(--text-primary)' }}>{c.name}</div>
-                <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
-                  {c.invoice_count} ảnh · {c.raw_item_count} sửa · {c.ci_item_count} CI
-                </div>
-                <div className="row" style={{ gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
-                  {c.raw_data_saved_at && <span className="badge badge-success">✓ DATA</span>}
-                  {c.ci_generated_at && <span className="badge badge-info">✓ CI</span>}
-                </div>
-              </div>
-              <button className="ghost danger" style={{ padding: '0 6px', height: 22, fontSize: 14, boxShadow: 'none' }}
-                onClick={(e) => { e.stopPropagation(); removeCustomer(c.id); }}>×</button>
+      <div className="col">
+        {!activeCustomer ? (
+          <div className="card muted">Chọn khách ở sidebar bên trái để xem chi tiết.</div>
+        ) : (
+          <>
+            <div className="tabs">
+              <button className={`tab ${tab==='scan'?'active':''}`} onClick={() => setTab('scan')}>
+                Bước 1 · Hóa đơn AI
+              </button>
+              <button className={`tab ${tab==='raw'?'active':''}`} onClick={() => setTab('raw')}>
+                Bước 2 · Data gốc
+              </button>
+              <button className={`tab ${tab==='edit'?'active':''}`} onClick={() => setTab('edit')}>
+                Bước 3 · Data sửa
+              </button>
+              <button className={`tab ${tab==='ci'?'active':''}`} onClick={() => setTab('ci')}>
+                Bước 4 · Commercial Invoice
+              </button>
             </div>
-          ))}
-          {addingCustomer && (
-            <div className="col" style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 6 }}>
-              <select value={pickCustomer} onChange={(e) => setPickCustomer(e.target.value)}>
-                <option value="">— Chọn khách —</option>
-                {availableCustomers.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
-                <button onClick={() => setAddingCustomer(false)}>Huỷ</button>
-                <button className="primary" disabled={!pickCustomer} onClick={addCustomerToShipment}>Thêm</button>
-              </div>
-              {availableCustomers.length === 0 && (
-                <div className="muted">Đã thêm hết khách. <Link to="/customers">Tạo khách mới</Link></div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Main panel */}
-        <div className="col">
-          {!activeCustomer ? (
-            <div className="card muted">Chọn khách bên trái để xem chi tiết.</div>
-          ) : (
-            <>
-              <div className="tabs">
-                <button className={`tab ${tab==='scan'?'active':''}`} onClick={() => setTab('scan')}>
-                  Bước 1 · Hóa đơn AI
-                </button>
-                <button className={`tab ${tab==='raw'?'active':''}`} onClick={() => setTab('raw')}>
-                  Bước 2 · Data gốc
-                </button>
-                <button className={`tab ${tab==='edit'?'active':''}`} onClick={() => setTab('edit')}>
-                  Bước 3 · Data sửa
-                </button>
-                <button className={`tab ${tab==='ci'?'active':''}`} onClick={() => setTab('ci')}>
-                  Bước 4 · Commercial Invoice
-                </button>
-              </div>
-              {tab === 'scan' && <ScanTab shipmentId={id} customer={activeCustomer} onReload={loadShip} />}
-              {tab === 'raw' && <RawSnapshotTab shipmentId={id} customer={activeCustomer} onReload={loadShip} />}
-              {tab === 'edit' && <EditedDataTab shipmentId={id} customer={activeCustomer} onReload={loadShip} />}
-              {tab === 'ci' && <CommercialInvoiceTab shipmentId={id} customer={activeCustomer} onReload={loadShip} onDownload={downloadExcel} />}
-            </>
-          )}
-        </div>
+            {tab === 'scan' && <ScanTab shipmentId={id} customer={activeCustomer} onReload={loadShip} />}
+            {tab === 'raw' && <RawSnapshotTab shipmentId={id} customer={activeCustomer} onReload={loadShip} />}
+            {tab === 'edit' && <EditedDataTab shipmentId={id} customer={activeCustomer} onReload={loadShip} />}
+            {tab === 'ci' && <CommercialInvoiceTab shipmentId={id} customer={activeCustomer} onReload={loadShip} onDownload={downloadExcel} />}
+          </>
+        )}
       </div>
     </div>
   );
@@ -671,7 +676,7 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
                   <tr>
                     <th style={{ minWidth: 320 }}>Tên VN</th>
                     <th style={{ minWidth: 220 }}>Tên EN</th>
-                    <th style={{ width: 80 }}>SL</th>
+                    <th style={{ width: 110 }}>SL</th>
                     <th style={{ width: 80 }}>ĐV</th>
                     <th style={{ width: 130 }}>Đơn giá ({currency})</th>
                     <th style={{ width: 160 }}>Material</th>
@@ -686,7 +691,7 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
                       <td><input value={r.name_en || ''} onChange={(e) => patchRow(r.id, { name_en: e.target.value })} /></td>
                       <td><input type="number" step="0.001" value={r.qty || ''} onChange={(e) => patchRow(r.id, { qty: e.target.value })} /></td>
                       <td><input value={r.unit || ''} onChange={(e) => patchRow(r.id, { unit: e.target.value })} /></td>
-                      <td><input type="number" step="0.01" value={r.unit_value || ''} onChange={(e) => patchRow(r.id, { unit_value: e.target.value })} /></td>
+                      <td><input type="number" step="1" value={Math.round(Number(r.unit_value || 0)) || ''} onChange={(e) => patchRow(r.id, { unit_value: Math.round(Number(e.target.value || 0)) })} /></td>
                       <td><input value={r.material || ''} onChange={(e) => patchRow(r.id, { material: e.target.value })} placeholder="vd: Stainless Steel" /></td>
                       <td><input value={r.hs_code_vn || ''} onChange={(e) => patchRow(r.id, { hs_code_vn: e.target.value })} className="mono" placeholder="XXXX.XX.XX" /></td>
                       <td><button className="danger" onClick={() => deleteRow(r.id)}>×</button></td>
@@ -698,7 +703,7 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
                       <td><input value={r.name_en} onChange={(e) => patchNewRow(r._tmp, { name_en: e.target.value })} /></td>
                       <td><input type="number" step="0.001" value={r.qty} onChange={(e) => patchNewRow(r._tmp, { qty: e.target.value })} /></td>
                       <td><input value={r.unit} onChange={(e) => patchNewRow(r._tmp, { unit: e.target.value })} /></td>
-                      <td><input type="number" step="0.01" value={r.unit_value} onChange={(e) => patchNewRow(r._tmp, { unit_value: e.target.value })} /></td>
+                      <td><input type="number" step="1" value={Math.round(Number(r.unit_value || 0)) || ''} onChange={(e) => patchNewRow(r._tmp, { unit_value: Math.round(Number(e.target.value || 0)) })} /></td>
                       <td><input value={r.material || ''} onChange={(e) => patchNewRow(r._tmp, { material: e.target.value })} placeholder="vd: Stainless Steel" /></td>
                       <td><input value={r.hs_code_vn || ''} onChange={(e) => patchNewRow(r._tmp, { hs_code_vn: e.target.value })} className="mono" placeholder="XXXX.XX.XX" /></td>
                       <td><button onClick={() => removeNewRow(r._tmp)}>×</button></td>

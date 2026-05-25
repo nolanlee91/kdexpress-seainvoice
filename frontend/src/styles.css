@@ -423,10 +423,103 @@ label:not(.btn) {
   gap: 1px;
   padding: 0 8px;
 }
-/* Primary nav (Operations) đẩy Account + user xuống bottom */
-.sidebar-nav-primary {
+/* Slot cho nội dung phụ trợ theo trang (vd customer list trong shipment detail).
+   Khi có content → chiếm phần giữa, scroll riêng. Khi không có → spacer flex:1 trong JSX. */
+.sidebar-extra {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 12px 0;
+  padding: 8px 0;
+  border-top: 1px solid var(--sidebar-border);
+  border-bottom: 1px solid var(--sidebar-border);
 }
+.sidebar-extra .sidebar-section-label { padding: 8px 20px 6px; margin: 0; }
+.sidebar-extra::-webkit-scrollbar { width: 6px; }
+.sidebar-extra::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border: none; }
+.sidebar-extra::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+
+.sidebar-customer-item {
+  margin: 2px 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--sidebar-text-secondary);
+  border: 1px solid transparent;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+  position: relative;
+}
+.sidebar-customer-item:hover { background: rgba(255,255,255,0.03); color: var(--sidebar-text); }
+.sidebar-customer-item.active {
+  background: var(--sidebar-surface);
+  color: var(--sidebar-text);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.sidebar-customer-item-name { font-size: 13px; font-weight: 500; line-height: 1.3; padding-right: 18px; }
+.sidebar-customer-item.active .sidebar-customer-item-name { font-weight: 600; }
+.sidebar-customer-item-meta { font-size: 11px; color: var(--sidebar-text-muted); margin-top: 2px; }
+.sidebar-customer-item-badges { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+.sidebar-customer-item-x {
+  position: absolute;
+  top: 6px; right: 6px;
+  width: 18px; height: 18px;
+  background: transparent;
+  border: none;
+  color: var(--sidebar-text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+.sidebar-customer-item:hover .sidebar-customer-item-x { opacity: 1; }
+.sidebar-customer-item-x:hover { background: rgba(255,255,255,0.06); color: var(--color-danger); }
+
+.sidebar-extra .sidebar-add-form {
+  margin: 8px 12px;
+  padding: 10px;
+  background: var(--sidebar-surface);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sidebar-extra .sidebar-add-form select {
+  width: 100%;
+  background: var(--sidebar-elevated);
+  color: var(--sidebar-text);
+  border: 1px solid var(--sidebar-border-strong);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.sidebar-extra .sidebar-add-form button {
+  background: transparent;
+  color: var(--sidebar-text-secondary);
+  border: 1px solid var(--sidebar-border-strong);
+  font-size: 12px;
+  padding: 4px 10px;
+  box-shadow: none;
+}
+.sidebar-extra .sidebar-add-form button.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.sidebar-extra .sidebar-add-trigger {
+  width: 100%;
+  background: transparent;
+  color: var(--sidebar-text-secondary);
+  border: 1px dashed var(--sidebar-border-strong);
+  font-size: 12px;
+  padding: 6px;
+  box-shadow: none;
+  margin: 4px 12px;
+  width: calc(100% - 24px);
+}
+.sidebar-extra .sidebar-add-trigger:hover { color: var(--sidebar-text); border-color: rgba(255,255,255,0.2); }
 .sidebar-link {
   display: flex;
   align-items: center;
