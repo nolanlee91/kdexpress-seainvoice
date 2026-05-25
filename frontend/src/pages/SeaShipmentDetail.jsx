@@ -77,9 +77,13 @@ export default function SeaShipmentDetail() {
         </p>
       </header>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 20 }}>
-        {/* Sidebar: Customers in shipment */}
-        <div className="card col" style={{ padding: 16, gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 20, alignItems: 'start' }}>
+        {/* Sidebar: Customers in shipment — sticky */}
+        <div className="card col" style={{
+          padding: 16, gap: 8,
+          position: 'sticky', top: 0,
+          maxHeight: 'calc(100vh - 64px)', overflowY: 'auto',
+        }}>
           <div className="row" style={{ justifyContent: 'space-between', marginBottom: 4 }}>
             <strong style={{ fontSize: 10, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.1em' }}>
               Khách trong chuyến
@@ -462,10 +466,10 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
   }
 
   async function suggestMissing() {
-    // Lấy các dòng chưa có material HOẶC chưa có hs_code_ca
+    // Lấy các dòng chưa có material HOẶC chưa có hs_code_vn
     const needSuggest = [
-      ...rows.filter((r) => !r.material || !r.hs_code_ca).map((r) => ({ id: r.id, name_vn: r.name_vn || '', name_en: r.name_en || '' })),
-      ...newRows.filter((r) => !r.material || !r.hs_code_ca).map((r) => ({ id: r._tmp, name_vn: r.name_vn || '', name_en: r.name_en || '' })),
+      ...rows.filter((r) => !r.material || !r.hs_code_vn).map((r) => ({ id: r.id, name_vn: r.name_vn || '', name_en: r.name_en || '' })),
+      ...newRows.filter((r) => !r.material || !r.hs_code_vn).map((r) => ({ id: r._tmp, name_vn: r.name_vn || '', name_en: r.name_en || '' })),
     ];
     if (needSuggest.length === 0) {
       setSuggestMsg('Tất cả dòng đã có material + HS code.');
@@ -598,7 +602,7 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
               {translating ? 'Đang dịch…' : '🌐 Dịch tiếng Anh (AI)'}
             </button>
             <button onClick={suggestMissing} disabled={suggesting} style={{ marginLeft: 8 }}
-              title="Dùng AI gợi ý Material + HS Code (Canada + Vietnam) cho các dòng chưa có">
+              title="Dùng AI gợi ý Material + HS Code VN cho các dòng chưa có">
               {suggesting ? 'Đang gợi ý…' : '🔍 Gợi ý HS + Chất liệu (AI)'}
             </button>
             <button className="primary" disabled={(!hasDirty && !settingsChanged) || loading} onClick={saveAll} style={{ marginLeft: 8 }}>
@@ -665,16 +669,12 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
               <table className="table">
                 <thead>
                   <tr>
-                    <th style={{ width: 50 }}>#</th>
-                    <th>Tên VN</th>
-                    <th>Tên EN</th>
+                    <th style={{ minWidth: 320 }}>Tên VN</th>
+                    <th style={{ minWidth: 220 }}>Tên EN</th>
                     <th style={{ width: 80 }}>SL</th>
                     <th style={{ width: 80 }}>ĐV</th>
                     <th style={{ width: 130 }}>Đơn giá ({currency})</th>
-                    <th style={{ width: 130 }}>Tổng ({currency})</th>
-                    <th style={{ width: 90 }}>Country</th>
                     <th style={{ width: 160 }}>Material</th>
-                    <th style={{ width: 130 }}>HS Code CA</th>
                     <th style={{ width: 110 }}>HS Code VN</th>
                     <th></th>
                   </tr>
@@ -682,38 +682,30 @@ function EditedDataTab({ shipmentId, customer, onReload }) {
                 <tbody>
                   {g.rows.map((r) => (
                     <tr key={r.id}>
-                      <td><input type="number" value={r.line_no || ''} onChange={(e) => patchRow(r.id, { line_no: Number(e.target.value) })} style={{ width: 50 }} /></td>
                       <td><input value={r.name_vn || ''} onChange={(e) => patchRow(r.id, { name_vn: e.target.value })} /></td>
                       <td><input value={r.name_en || ''} onChange={(e) => patchRow(r.id, { name_en: e.target.value })} /></td>
                       <td><input type="number" step="0.001" value={r.qty || ''} onChange={(e) => patchRow(r.id, { qty: e.target.value })} /></td>
                       <td><input value={r.unit || ''} onChange={(e) => patchRow(r.id, { unit: e.target.value })} /></td>
                       <td><input type="number" step="0.01" value={r.unit_value || ''} onChange={(e) => patchRow(r.id, { unit_value: e.target.value })} /></td>
-                      <td><input type="number" step="0.01" value={r.total_value || ''} onChange={(e) => patchRow(r.id, { total_value: e.target.value })} /></td>
-                      <td><input value={r.country_of_origin || ''} onChange={(e) => patchRow(r.id, { country_of_origin: e.target.value })} /></td>
                       <td><input value={r.material || ''} onChange={(e) => patchRow(r.id, { material: e.target.value })} placeholder="vd: Stainless Steel" /></td>
-                      <td><input value={r.hs_code_ca || ''} onChange={(e) => patchRow(r.id, { hs_code_ca: e.target.value })} className="mono" placeholder="XXXX.XX.XX.XX" /></td>
                       <td><input value={r.hs_code_vn || ''} onChange={(e) => patchRow(r.id, { hs_code_vn: e.target.value })} className="mono" placeholder="XXXX.XX.XX" /></td>
                       <td><button className="danger" onClick={() => deleteRow(r.id)}>×</button></td>
                     </tr>
                   ))}
                   {g.newRows.map((r) => (
                     <tr key={r._tmp} style={{ background: 'rgba(22,163,74,0.06)' }}>
-                      <td><input type="number" value={r.line_no} onChange={(e) => patchNewRow(r._tmp, { line_no: Number(e.target.value) })} style={{ width: 50 }} /></td>
                       <td><input value={r.name_vn} onChange={(e) => patchNewRow(r._tmp, { name_vn: e.target.value })} /></td>
                       <td><input value={r.name_en} onChange={(e) => patchNewRow(r._tmp, { name_en: e.target.value })} /></td>
                       <td><input type="number" step="0.001" value={r.qty} onChange={(e) => patchNewRow(r._tmp, { qty: e.target.value })} /></td>
                       <td><input value={r.unit} onChange={(e) => patchNewRow(r._tmp, { unit: e.target.value })} /></td>
                       <td><input type="number" step="0.01" value={r.unit_value} onChange={(e) => patchNewRow(r._tmp, { unit_value: e.target.value })} /></td>
-                      <td><input type="number" step="0.01" value={r.total_value} onChange={(e) => patchNewRow(r._tmp, { total_value: e.target.value })} /></td>
-                      <td><input value={r.country_of_origin} onChange={(e) => patchNewRow(r._tmp, { country_of_origin: e.target.value })} /></td>
                       <td><input value={r.material || ''} onChange={(e) => patchNewRow(r._tmp, { material: e.target.value })} placeholder="vd: Stainless Steel" /></td>
-                      <td><input value={r.hs_code_ca || ''} onChange={(e) => patchNewRow(r._tmp, { hs_code_ca: e.target.value })} className="mono" placeholder="XXXX.XX.XX.XX" /></td>
                       <td><input value={r.hs_code_vn || ''} onChange={(e) => patchNewRow(r._tmp, { hs_code_vn: e.target.value })} className="mono" placeholder="XXXX.XX.XX" /></td>
                       <td><button onClick={() => removeNewRow(r._tmp)}>×</button></td>
                     </tr>
                   ))}
                   {g.rows.length === 0 && g.newRows.length === 0 && (
-                    <tr><td colSpan={12} className="muted" style={{ padding: 16, textAlign: 'center' }}>
+                    <tr><td colSpan={8} className="muted" style={{ padding: 16, textAlign: 'center' }}>
                       Không có items từ ảnh này.
                     </td></tr>
                   )}
