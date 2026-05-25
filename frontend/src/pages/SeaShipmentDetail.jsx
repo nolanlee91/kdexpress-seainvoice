@@ -55,16 +55,13 @@ export default function SeaShipmentDetail() {
       .catch((e) => alert(e.message));
   }
 
-  if (!ship) return <div className="muted">Đang tải…</div>;
-
-  const activeCustomer = customers.find((c) => c.id === activeCustomerId);
-  const availableCustomers = allCustomers.filter(
-    (c) => !customers.some((x) => x.id === c.id)
-  );
-
-  // Render customer-in-shipment list vào dark sidebar slot
+  // Render customer-in-shipment list vào dark sidebar slot.
+  // PHẢI gọi trước mọi early return để giữ thứ tự hooks ổn định.
   useEffect(() => {
     if (!setSidebarExtra) return;
+    const availableCustomers = allCustomers.filter(
+      (c) => !customers.some((x) => x.id === c.id)
+    );
     setSidebarExtra(
       <>
         <div className="sidebar-section-label">Khách trong chuyến</div>
@@ -121,7 +118,11 @@ export default function SeaShipmentDetail() {
       </>
     );
     return () => setSidebarExtra(null);
-  }, [customers, activeCustomerId, addingCustomer, pickCustomer, availableCustomers]);
+  }, [customers, activeCustomerId, addingCustomer, pickCustomer, allCustomers]);
+
+  if (!ship) return <div className="muted">Đang tải…</div>;
+
+  const activeCustomer = customers.find((c) => c.id === activeCustomerId);
 
   return (
     <div className="col" style={{ gap: 20 }}>
